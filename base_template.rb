@@ -5,6 +5,8 @@ run "mkdir -p test/matchers"
 run "mkdir -p test/support"
 run "mkdir -p app/decorators"
 run "mkdir -p app/presenters"
+run "mkdir -p script/setup"
+run "mkdir -p script/jenkins"
 
 # ==========================================================================
 # Setup Gems
@@ -82,9 +84,14 @@ EOTL
 EOF
 
 # ==========================================================================
-# Copy database yaml
+# Copy database yaml to an ERB file and edit it
 # ==========================================================================
 run "cp config/database.yml config/database.yml.erb"
+
+# replace username: ... with: username: <%= @user %>
+# replace password: ... with: password: <%= @password %>
+run "sed -i 'username: <%= @user %>' /username:\s+\w+/g config/database.yml.erb"
+run "sed -i 'password: <%= @password %>' /password:\s+\w+/g config/database.yml.erb"
 
 # ==========================================================================
 # Update the Git Ignore File
@@ -837,8 +844,82 @@ EOF
 
 
 # ==========================================================================
-#
+# Add a setup script to setup the application
 # ==========================================================================
+run <<-EOF
+tee script/setup <<EOTL
+#!/usr/bin/env bash
+set -e
+
+# install gems
+./bin/bundle
+
+# create config/database.yml file
+./bin/rake db:config:create --trace
+
+# create database(s)
+./bin/rake db:create --trace
+
+# migrate those databases
+./bin/rake db:migrate --trace
+
+# input seed data into the database
+./bin/rake db:seed --trace
+
+echo
+echo
+# Instructions
+echo "==> Dependencies (gems) have been installed."
+echo "==> Database connection adapter(config/database.yml) has been created."
+echo "==> The database has been migrated to the latest Schema."
+echo "==> Seed data has been loaded into the database."
+echo
+echo "==> Type 'powder -h' at the terminal to see commands for the Pow Server."
+echo "==> Type 'rake -T' at the terminal to see commands available for Rake to run against the Rails application."
+echo
+echo "==> Setting up the Pow Server. It'll output a URL you can use within the browser to interact with this application."
+
+
+# setup pow
+powder link
+
+EOTL
+EOF
+run "chmod +x script/setup"
+
+# ==========================================================================
+# Add a jenkins script for CI setup
+# ==========================================================================
+run <<-EOF
+tee script/jenkins <<EOTL
+#!/usr/bin/env bash
+
+set -e
+
+# install gems
+./bin/bundle
+
+# create config/database.yml file
+./bin/rake db:config:jenkins[jenkins,jankyjenkins] --trace
+
+./bin/rake db:rebuild --trace
+
+# create database(s)
+# ./bin/rake db:create --trace
+
+# migrate those databases
+# ./bin/rake db:migrate --trace
+
+# build test database from the schema
+./bin/rake db:test:prepare --trace
+
+# run all tests
+./bin/rake test
+
+EOTL
+EOF
+run "chmod +x script/jenkins"
+
 # ==========================================================================
 #
 # ==========================================================================
