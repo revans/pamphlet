@@ -168,7 +168,7 @@ module SimplecovConfig
     add_group 'Models',         'app/models'
     add_group 'Decorators',     'app/decorators'
     add_group 'Presenters',     'app/presenters'
-    add_group 'Services',       'app/services'
+    # add_group 'Services',       'app/services'
     add_group 'Helpers',        'app/helpers'
     add_group 'Mailers',        'app/mailers'
     add_group 'Libraries',      'lib'
@@ -201,13 +201,12 @@ Dir[Rails.root.join('test/support/**/*.rb')].each { |file| require file }
 Dir[Rails.root.join('test/matchers/**/*.rb')].each { |file| require file }
 
 # setup Capybara
-# Capybara.app = GameForum::Application
+# Capybara.app = ApplicationName::Application
 Capybara.default_driver = :rack_test
 
 ############################
 class ActiveSupport::TestCase
   ActiveRecord::Migration.check_pending!
-  include AssociationHelper
   include FixtureOverlord
 
   fixture_overlord :rule
@@ -291,7 +290,6 @@ MiniTest::Spec.register_spec_type(/Controller$/, ControllerSpec)
 
 class AcceptanceSpec < MiniTest::Spec
   include Capybara::DSL
-  # include CapybaraExtensions
 
   after do
     Capybara.reset_sessions!
@@ -301,7 +299,6 @@ end
 
 # Acceptance tests = describe "Feature:..."
 MiniTest::Spec.register_spec_type(/^Feature:/i, AcceptanceSpec)
-
 
 EOTL
 EOF
@@ -393,21 +390,16 @@ module FileHelper
     Rails.root.join('test/assets')
   end
 
-  def file_read(filename)
+  def read_file(filename)
     asset_path.join(filename).read
   end
 
-  def file_open(filename)
+  def open_file(filename)
     asset_path.join(filename).to_s
   end
 
   def fixture_data(name)
-    render_binary(asset_path.join(name).to_s)
-  end
-
-  def render_binary(filename)
-    data = File.open(filename,'rb').read
-    YAML.dump(data)
+    YAML.dump(asset_path.join(name).read)
   end
 end
 EOTL
