@@ -5,40 +5,68 @@ run "mkdir -p test/matchers"
 run "mkdir -p test/support"
 run "mkdir -p app/decorators"
 run "mkdir -p app/presenters"
-run "mkdir -p script/setup"
-run "mkdir -p script/jenkins"
+run "mkdir -p script"
+run "mkdir -p app/assets/templates"
+run "mkdir -p app/assets/fonts"
+run "touch app/assets/templates/.gitkeep"
+run "touch app/assets/fonts/.gitkeep"
 
 # ==========================================================================
 # Setup Gems
 # ==========================================================================
+@simpleform = yes?("Do you want to use simpleform? (defaults to yes)")
+@devise     = yes?("Do you want to use devise for Authentication? (defaults to yes)")
+@bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure? (defaults to yes)")
+@username   = ask("What username will you be using for development and testing? (defaults to '`whoami`')")
+@username   = `whoami`.chomp if @username.blank?
+@password   = ask("What password will you be using for development and testing? (defaults to empty string)")
+@simpleform ||= true
+@devise     ||= true
+@bourbon    ||= true
 
-gem 'simple_form' if yes?("Use simpleform?")
+if @simpleform
+  gem 'simple_form', '~> 3.0.0'
+  generate "simple_form:install"
+end
 
-@bourbon = yes?("Bourbon & Neat for UI Structure?")
+if @devise
+  gem 'devise', '~> 3.1.1'
+  generate "devise:install"
+  model_name = ask("What would you like the user model to be called? (defaults to 'user')")
+  model_name = "user" if model_name.blank?
+  generate "devise", model_name
+end
+
 if @bourbon
   gem "bourbon"
   gem "neat"
 end
 
+gem_group :development, :test do
+  gem 'pry'
+  gem 'foreman'
+end
 
-gem 'debugger',   group: [:development, :test]
-gem 'pry',        group: [:development, :test]
-gem 'foreman',    group: [:development, :test]
+gem_group :development do
+  gem 'capistrano'
+  gem 'metric_fu'
+  gem 'cane'
+  gem 'brakeman'
+  gem 'better_errors'
+  gem 'binding_of_caller'
+  gem 'meta_request'
+end
 
+gem_group :test do
+  gem 'minitest',   require: false
+  gem 'rack-test',  require: false
+  gem 'mocha',      require: false
+  gem 'simplecov'
+  gem 'capybara'
 
+  gem 'fixture_overlord', github: 'revans/fixture_overlord', branch: :master
+end
 
-gem 'capistrano',         group: :development
-gem 'metric_fu',          group: :development
-gem 'cane',               group: :development
-gem 'brakeman',           group: :development
-gem 'better_errors',      group: :development
-gem 'binding_of_caller',  group: :development
-gem 'meta_request',       group: :development
-
-gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', group: :development
-
-# generates model and controller UML diagrams as svg and dot
-gem 'railroady', group: :development
 
 #
 # Performance turning and UML diagraming
@@ -54,14 +82,12 @@ gem 'railroady', group: :development
 #
 # http://localhost:3000/some_action?profile=true
 
+# gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', group: :development
 
-gem 'minitest',   require: false,   group: :test
-gem 'rack-test',  require: false,   group: :test
-gem 'mocha',      require: false,   group: :test
-gem 'simplecov',                    group: :test
-gem 'capybara',                     group: :test
+# generates model and controller UML diagrams as svg and dot
+# gem 'railroady', group: :development
 
-gem 'fixture_overlord', github: 'revans/fixture_overlord', group: :test
+inject_into_file 'Gemfile', "\nruby '2.0.0'\n", after: "source 'https://rubygems.org'"
 
 # ==========================================================================
 # Create a Procfile
@@ -69,7 +95,12 @@ gem 'fixture_overlord', github: 'revans/fixture_overlord', group: :test
 run "echo 'web: bundle exec unicorn -p $PORT -c ./config/unicorn.rb"
 
 # We need this with foreman to see log output immediately
-run "echo 'STDOUT.sync = true' >> config/environments/development.rb"
+run <<-EOF
+tee -a config/environments/development.rb <<EOTL
+
+STDOUT.sync = true
+EOTL
+EOF
 
 # ==========================================================================
 # Add a .rbenv-vars files for use with rbenv,
@@ -86,12 +117,15 @@ EOF
 # ==========================================================================
 # Copy database yaml to an ERB file and edit it
 # ==========================================================================
+inject_into_file 'config/database.yml', "\n  host: localhost\n", after: "password:" # need this for postgresql, not sure about mysql
 run "cp config/database.yml config/database.yml.erb"
 
-# replace username: ... with: username: <%= @user %>
-# replace password: ... with: password: <%= @password %>
-run "sed -i 'username: <%= @user %>' /username:\s+\w+/g config/database.yml.erb"
-run "sed -i 'password: <%= @password %>' /password:\s+\w+/g config/database.yml.erb"
+gsub_file "config/database.yml", /username: .*/, "username: #{@username}"
+gsub_file "config/database.yml", /password: .*/, "password: #{@password}"
+
+gsub_file "config/database.yml.erb", /username: .*/,  "username: <%= @user %>"
+gsub_file "config/database.yml.erb", /password:/,     "password: pass"
+gsub_file "config/database.yml.erb", /password: .*/,  "password: <%= @password %>"
 
 # ==========================================================================
 # Update the Git Ignore File
@@ -101,7 +135,7 @@ tee -a .gitignore <<EOF
 config/database.yml
 .env
 .DS_Store
-converage
+coverage
 .powenv
 
 EOF
@@ -190,9 +224,9 @@ EOF
 # ==========================================================================
 # Update the test helper to use some specific settings
 # ==========================================================================
-run <<-EOF
-tee -a test/test_helper.rb <<EOTL
+gsub_file 'test/test_helper.rb', /fixtures :all/, '# fixtures :all'
 
+inject_into_file 'test/test_helper.rb', :after => "require 'rails/test_help'\n" do <<-RUBY
 require 'capybara/dsl'
 require 'minitest/autorun'
 
@@ -211,17 +245,17 @@ Dir[Rails.root.join('test/matchers/**/*.rb')].each { |file| require file }
 # Capybara.app = ApplicationName::Application
 Capybara.default_driver = :rack_test
 
-############################
-class ActiveSupport::TestCase
-  ActiveRecord::Migration.check_pending!
-  include FixtureOverlord
-
-  fixture_overlord :rule
-
-  def teardown
-    # QC.delete_all
-  end
+RUBY
 end
+
+inject_into_file 'test/test_helper.rb', :after => "ActiveRecord::Migration.check_pending!\n" do <<-RUBY
+  include FixtureOverlord
+  fixture_overlord :rule
+RUBY
+end
+
+run <<-EOF
+tee -a test/test_helper.rb <<EOTL
 
 ############################
 class ActionController::TestCase
@@ -229,10 +263,6 @@ class ActionController::TestCase
   fixture_overlord :rule
 
   self.use_transactional_fixtures = true
-
-  def teardown
-    # QC.delete_all
-  end
 end
 
 ############################
@@ -246,7 +276,6 @@ class ActionDispatch::IntegrationTest
   def teardown
     Capybara.reset_sessions!
     Capybara.use_default_driver
-    # QC.delete_all
   end
 end
 
@@ -254,10 +283,6 @@ end
 class ActionView::TestCase
   include FixtureOverlord
   fixture_overlord :rule
-
-  def teardown
-    # QC.delete_all
-  end
 end
 
 ##############################################
@@ -282,10 +307,6 @@ class MiniTest::Spec
   before do
     @routes = Rails.application.routes
   end
-
-  after do
-    # QC.delete_all
-  end
 end
 
 class ControllerSpec < MiniTest::Spec
@@ -307,81 +328,6 @@ end
 # Acceptance tests = describe "Feature:..."
 MiniTest::Spec.register_spec_type(/^Feature:/i, AcceptanceSpec)
 
-EOTL
-EOF
-
-
-# ==========================================================================
-# Add some test matcher assertions
-# ==========================================================================
-run <<-EOF
-tee test/matchers/assertion_matchers.rb <<EOTL
-require 'minitest/autorun'
-module MiniTest::Assertions
-  def assert_link(obj, msg = nil)
-    msg = message(msg) { "Expected #{mu_pp(obj)} to be a link." }
-
-    assert_includes obj, "<a",    msg
-    assert_includes obj, "</a>",  msg
-    assert_includes obj, "href=", msg
-  end
-
-  def refute_link(obj, msg = nil)
-    msg = message(msg) { "Expected #{mu_pp(obj)} to not be a link." }
-
-    refute_includes obj, "<a",    msg
-    refute_includes obj, "</a>",  msg
-    refute_includes obj, "href=", msg
-  end
-
-  def assert_remote_link(obj, msg=nil)
-    msg = message(msg) { "Expected #{mu_pp(obj)} to be a remote link." }
-    assert_link(obj)
-    assert_includes obj, 'data-remote="true"'
-  end
-
-  def refute_remote_link(obj, msg=nil)
-    msg = message(msg) { "Expected #{mu_pp(obj)} to not be a remote link." }
-
-    refute_link(obj, msg)
-    refute_includes obj, 'data-remote="true"', msg
-  end
-
-  def assert_link_to(exp, act, msg=nil)
-    msg = message(msg) {
-      "Expected #{mu_pp(act)} to be a link to #{mu_pp(exp)}."
-    }
-
-    assert_includes act, exp, msg
-  end
-
-  def refute_link_to(exp, act, msg=nil)
-    msg = message(msg) {
-      "Expected #{mu_pp(act)} to not be a link to #{mu_pp(exp)}."
-    }
-
-    refute_includes act, exp, msg
-  end
-
-  def assert_icon_for(exp, act, msg=nil)
-    msg = message(msg) {
-      "Expected #{mu_pp(act)} class attribute to be set to icon-#{mu_pp(exp)}."
-    }
-
-    assert_includes act, "icon-#{exp}", msg
-  end
-
-  def refute_icon(obj, msg=nil)
-    msg = message(msg) {
-      "Expected #{mu_pp(act)} class attribute to not be set to icon-#{mu_pp(exp)}."
-    }
-
-    refute_includes act, "icon-#{exp}", msg
-  end
-end
-
-# String.infect_an_assertion :assert_link, :must_be_link
-# String.infect_an_assertion :assert_remote_link, :must_be_remote_link
 EOTL
 EOF
 
@@ -466,7 +412,7 @@ namespace :fixtures do
       next unless model.respond_to?(:superclass) && model.superclass == ActiveRecord::Base
 
       # Open a File with the model name within the fixtures location (path)
-      File.open(File.join(fixture_directory, "#{model.to_s.pluralize}_fixture.yml"), "w") do |file|
+      File.open(File.join(fixture_directory, model.to_s.pluralize + "_fixture.yml"), "w") do |file|
 
         # iterate over the model data and dump it as yaml to the fixture file
         model.all.each { |klass| YAML.dump(klass, file) }
@@ -498,7 +444,7 @@ namespace :db do
 
       %x{stty -icanon -echo}
       # get data
-      @user = `whoami`.chomp
+      @user = %x|whoami|.chomp
       @password = STDIN.gets.chomp
 
       content = ERB.new(db_example.read).result
@@ -553,7 +499,7 @@ unless Rails.env.production?
   namespace :report do
     desc "Run SimpleCov"
     task :coverage do
-      `COVERAGE=true rake test`
+      %x|COVERAGE=true rake test|
     end
 
     desc "Run Cane"
@@ -563,12 +509,12 @@ unless Rails.env.production?
 
     desc "Run MetricFu"
     task :metrics do
-      `cd #{Rails.root.to_s} && metric_fu -r`
+      system('cd ' + Rails.root.to_s + ' metric_fu -r')
     end
 
     desc "Run Brakeman"
     task :security do
-      `cd #{Rails.root.to_s} && brakeman -d -o tmp/security.html`
+      system 'cd ' + Rails.root.to_s + ' brakeman -d -o tmp/security.html'
     end
 
     desc "Run all Reports"
@@ -588,23 +534,6 @@ EOF
 # ==========================================================================
 run <<-EOF
 tee lib/tasks/test.rake <<EOTL
-
-# expand to the "extra" tests that we have
-# feature_tests   = Rake::Task["test:acceptance"]
-# service_tests   = Rake::Task["test:services"]
-library_tests   = Rake::Task["test:libraries"]
-feature_tests   = Rake::Task["test:features"]
-resource_tests  = Rake::Task["test:resources"]
-
-test_task = Rake::Task[:test]
-test_task.enhance do
-  # feature_tests.invoke
-  # service_tests.invoke
-  library_tests.invoke
-  feature_tests.invoke
-  resource_tests.invoke
-end
-
 namespace :test do
   desc "Acceptance tests"
   Rake::TestTask.new(:acceptance) do |t|
@@ -641,6 +570,16 @@ namespace :test do
     t.verbose = true
   end
 end
+
+
+Rake::Task[:test].enhance do
+  Rake::Task["test:acceptance"].invoke
+  Rake::Task["test:services"].invoke
+  Rake::Task["test:libraries"].invoke
+  Rake::Task["test:features"].invoke
+  Rake::Task["test:resources"].invoke
+end
+
 EOTL
 EOF
 
@@ -726,15 +665,13 @@ EOF
 # ==========================================================================
 # Add new flash types and a respond_to :html, :js, :json
 # ==========================================================================
-run <<-EOF
-tee -a app/controller/application_controller.rb <<EOTL
+inject_into_file 'app/controllers/application_controller.rb', after: "protect_from_forgery with: :exception\n" do <<-RUBY
+  # adds more flash types
+  add_flash_types :error, :success, :info, :block
+  respond_to :html, :js, :json
 
-# adds more flash types
-add_flash_types :error, :success, :info, :block
-respond_to :html, :js, :json
-
-EOTL
-EOF
+RUBY
+end
 
 # ==========================================================================
 # Rename the CSS and JS files to SCSS and Coffee
@@ -748,6 +685,8 @@ if @bourbon
   run "echo '@import \"bourbon\";' >>  app/assets/stylesheets/application.css.scss"
   run "echo '@import \"neat\";' >>  app/assets/stylesheets/application.css.scss"
 end
+
+run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_tree .' > app/assets/javascripts/application.js.coffee"
 
 # ==========================================================================
 # Add a module to be extended to override the inheritance type column in
@@ -921,8 +860,141 @@ EOF
 run "chmod +x script/jenkins"
 
 # ==========================================================================
-#
+# Update the default layout
 # ==========================================================================
+run <<-EOF
+tee app/views/layouts/application.html.erb <<EOTL
+<!DOCTYPE html>
+<!--[if lt IE 7]>       <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>          <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>          <html class="no-js lt-ie9"> <![endif]-->
+<!--[if IEMobile 7 ]>   <html class="no-js iem7"> <![endif]-->
+
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)]><!-->
+<html class="no-js">
+<!--<![endif]-->
+
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="">
+
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta http-equiv="cleartype" content="on">
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="img/touch/apple-touch-icon-144x144-precomposed.png">
+  <link rel="apple-touch-icon-precomposed" sizes="114x114" href="img/touch/apple-touch-icon-114x114-precomposed.png">
+  <link rel="apple-touch-icon-precomposed" sizes="72x72" href="img/touch/apple-touch-icon-72x72-precomposed.png">
+  <link rel="apple-touch-icon-precomposed" href="img/touch/apple-touch-icon-57x57-precomposed.png">
+  <link rel="shortcut icon" href="img/touch/apple-touch-icon.png">
+
+  <!-- Tile icon for Win8 (144x144 + tile color) -->
+  <meta name="msapplication-TileImage" content="img/touch/apple-touch-icon-144x144-precomposed.png">
+  <meta name="msapplication-TileColor" content="#222222">
+
+
+  <!-- For iOS web apps. Delete if not needed. https://github.com/h5bp/mobile-boilerplate/issues/94 -->
+    <!--
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="">
+    -->
+
+  <!-- This script prevents links from opening in Mobile Safari. https://gist.github.com/1042026 -->
+    <!--
+    <script>(function(a,b,c){if(c in b&&b[c]){var d,e=a.location,f=/^(a|html)$/i;a.addEventListener("click",function(a){d=a.target;while(!f.test(d.nodeName))d=d.parentNode;"href"in d&&(d.href.indexOf("http")||~d.href.indexOf(e.host))&&(a.preventDefault(),e.href=d.href)},!1)}})(document,window.navigator,"standalone")</script>
+    -->
+
+    <title></title>
+
+    <%= stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true %>
+    <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
+    <%= csrf_meta_tags %>
+
+  </head>
+  <body ng-app>
+    <!--[if lt IE 7]>
+      <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+    <![endif]-->
+
+    <div class="container">
+      <div class="row">
+        <div class="col-md-3"></div>
+        <div class="col-md-9" role="main">
+          <%= yield %>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>
+EOTL
+EOF
+
+# ==========================================================================
+# Add bootstrap
+# ==========================================================================
+run <<-EOF
+curl https://raw.github.com/twbs/bootstrap/master/dist/css/bootstrap.min.css > vendor/assets/stylesheets/bootstrap.css
+curl https://raw.github.com/twbs/bootstrap/master/dist/js/bootstrap.min.js > vendor/assets/javascripts/bootstrap.js
+EOF
+
+# ==========================================================================
+# Add Bootstrap to the 'Assets to be Precompiled' list
+# ==========================================================================
+run <<-EOF
+tee config/environments/assets_to_precompile.rb <<EOTL
+# Assets to Precompile
+#
+# Use a module to manage the assets that are added and need to be precompiled
+# so we don't have to add them to each environment.
+#
+module AssetsToPrecompile
+  extend self
+
+  # JavaScript and CSS Assets
+  def list
+    stylesheets + javascripts
+  end
+
+  def javascripts
+    %w|bootstrap.js|
+  end
+
+  def stylesheets
+    %w|bootstrap.css|
+  end
+end
+EOTL
+EOF
+
+gsub_file "config/environments/production.rb", /# config.assets.precompile \+= %w\( search\.js \)/, "require_relative 'assets_to_precompile'\n  config.assets.precompile += AssetsToPrecompile.list"
+
+# ==========================================================================
+# Move the Readme to Markdown
+# ========================================================================
+run "rm README.rdoc"
+run "echo '# Readme' > Readme.mkd"
+
+# ==========================================================================
+# Create database, Run migrations, and get this into version control
+# ==========================================================================
+rake "db:create"
+rake "db:migrate"
+
+run <<-EOF
+git init
+git add --all
+git commit -am "Stubbed out the Application"
+EOF
+
+puts "To get the Twitter Bootstrap Font files, you can go here: https://github.com/twbs/bootstrap/tree/master/dist/fonts"
+puts "Don't forget Modernizr: http://modernizr.com/download/"
+puts "We didn't add it because we haven't found an easy way to automate the latest build to download."
+
 # ==========================================================================
 #
 # ==========================================================================
