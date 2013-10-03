@@ -20,48 +20,48 @@ if @bourbon
   gem "neat"
 end
 
-group [:development, :test] do
-  gem 'debugger'
-  gem 'pry'
-  gem 'foreman'
-end
 
-group :development do
-  gem 'capistrano'
-  gem 'metric_fu'
-  gem 'cane'
-  gem 'brakeman'
-  # gem 'better_errors'
-  # gem 'binding_of_caller'
-  # gem 'meta_request'
+gem 'debugger',   group: [:development, :test]
+gem 'pry',        group: [:development, :test]
+gem 'foreman',    group: [:development, :test]
 
-  # gem 'rack-perftools_profiler', require: 'rack/perftools_profiler'
-  #
-  # Performance turning and UML diagraming
-  # --------------------------------------
-  #
-  # these require graphviz ghostscript
-  #
-  # gem 'railroady' # generates model and controller UML diagrams as svg and dot
-  # gem 'rack-perftools_profiler', require: 'rack/perftools_profiler'
-  #
-  # add to config/application.rb
-  # config.middleware.use ::Rack::PerftoolsProfiler, default_printer: 'gif', bundler: true
-  #
-  # view in browser
-  # ---------------
-  #
-  # http://localhost:3000/some_action?profile=true
-end
 
-group :test do
-  gem 'minitest',   require: false
-  gem 'rack-test',  require: false
-  gem 'mocha',      require: false
-  gem 'simplecov'
-  gem 'capybara'
-  gem 'fixture_overlord', github: 'revans/fixture_overlord'
-end
+
+gem 'capistrano',         group: :development
+gem 'metric_fu',          group: :development
+gem 'cane',               group: :development
+gem 'brakeman',           group: :development
+gem 'better_errors',      group: :development
+gem 'binding_of_caller',  group: :development
+gem 'meta_request',       group: :development
+
+gem 'rack-perftools_profiler', require: 'rack/perftools_profiler', group: :development
+
+# generates model and controller UML diagrams as svg and dot
+gem 'railroady', group: :development
+
+#
+# Performance turning and UML diagraming
+# --------------------------------------
+#
+# these require graphviz ghostscript
+#
+# add to config/application.rb
+# config.middleware.use ::Rack::PerftoolsProfiler, default_printer: 'gif', bundler: true
+#
+# view in browser
+# ---------------
+#
+# http://localhost:3000/some_action?profile=true
+
+
+gem 'minitest',   require: false,   group: :test
+gem 'rack-test',  require: false,   group: :test
+gem 'mocha',      require: false,   group: :test
+gem 'simplecov',                    group: :test
+gem 'capybara',                     group: :test
+
+gem 'fixture_overlord', github: 'revans/fixture_overlord', group: :test
 
 # ==========================================================================
 # Create a Procfile
