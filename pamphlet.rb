@@ -14,15 +14,13 @@ run "touch app/assets/fonts/.gitkeep"
 # ==========================================================================
 # Setup Gems
 # ==========================================================================
-@simpleform = yes?("Do you want to use simpleform? (defaults to yes)")
-@devise     = yes?("Do you want to use devise for Authentication? (defaults to yes)")
-@bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure? (defaults to yes)")
+@simpleform = yes?("Do you want to use simpleform?")
+@devise     = yes?("Do you want to use devise for Authentication?")
+@bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure?")
+
 @username   = ask("What username will you be using for development and testing? (defaults to '`whoami`')")
 @username   = `whoami`.chomp if @username.blank?
 @password   = ask("What password will you be using for development and testing? (defaults to empty string)")
-@simpleform ||= true
-@devise     ||= true
-@bourbon    ||= true
 
 if @simpleform
   gem 'simple_form', '~> 3.0.0'
