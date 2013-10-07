@@ -18,9 +18,15 @@ run "touch app/assets/fonts/.gitkeep"
 @devise     = yes?("Do you want to use devise for Authentication?")
 @bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure?")
 
-@username   = ask("What username will you be using for development and testing? (defaults to '`whoami`')")
-@username   = `whoami`.chomp if @username.blank?
-@password   = ask("What password will you be using for development and testing? (defaults to empty string)")
+@mysql      = !open('config/database.yml', 'r').grep(/mysql/).empty?
+@sqlite     = !open('config/database.yml', 'r').grep(/sqlite3/).empty?
+
+unless @sqlite
+  @username   = ask("What username will you be using for development and testing? (defaults to '`whoami`')")
+  @password   = ask("What password will you be using for development and testing? (defaults to empty string)")
+  @username   = "root"          if @mysql && @username.blank?
+  @username ||= `whoami`.chomp  if @username.blank?
+end
 
 if @simpleform
   gem 'simple_form', '~> 3.0.0'
@@ -115,15 +121,21 @@ EOF
 # ==========================================================================
 # Copy database yaml to an ERB file and edit it
 # ==========================================================================
-inject_into_file 'config/database.yml', "\n  host: localhost\n", after: "password:" # need this for postgresql, not sure about mysql
+
+if !@mysql && !@sqlite
+  inject_into_file 'config/database.yml', "\n  host: localhost\n", after: "password:" # need this for postgresql, not sure about mysql
+end
+
 run "cp config/database.yml config/database.yml.erb"
 
-gsub_file "config/database.yml", /username: .*/, "username: #{@username}"
-gsub_file "config/database.yml", /password: .*/, "password: #{@password}"
+if !@sqlite
+  gsub_file "config/database.yml", /username: .*/, "username: #{@username}"
+  gsub_file "config/database.yml", /password: .*/, "password: #{@password}"
 
-gsub_file "config/database.yml.erb", /username: .*/,  "username: <%= @user %>"
-gsub_file "config/database.yml.erb", /password:/,     "password: pass"
-gsub_file "config/database.yml.erb", /password: .*/,  "password: <%= @password %>"
+  gsub_file "config/database.yml.erb", /username: .*/,  "username: <%= @user %>"
+  gsub_file "config/database.yml.erb", /password:/,     "password: pass"
+  gsub_file "config/database.yml.erb", /password: .*/,  "password: <%= @password %>"
+end
 
 # ==========================================================================
 # Update the Git Ignore File
