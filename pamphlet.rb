@@ -14,18 +14,27 @@ run "touch app/assets/fonts/.gitkeep"
 # ==========================================================================
 # Setup Gems
 # ==========================================================================
+@sequel     = yes?("Did you want to Sequel?")
+
 @simpleform = yes?("Do you want to use simpleform?")
 @devise     = yes?("Do you want to use devise for Authentication?")
 @bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure?")
 
 @mysql      = !open('config/database.yml', 'r').grep(/mysql/).empty?
 @sqlite     = !open('config/database.yml', 'r').grep(/sqlite3/).empty?
+@postgres   = !open('config/database.yml', 'r').grep(/postgres/).empty?
+
 
 unless @sqlite
   @username   = ask("What username will you be using for development and testing? (defaults to '`whoami`')")
   @password   = ask("What password will you be using for development and testing? (defaults to empty string)")
   @username   = "root"          if @mysql && @username.blank?
   @username ||= `whoami`.chomp  if @username.blank?
+end
+
+if @sequel
+  gem('sequel_pg', require: 'sequel') if @postgres
+  gem 'sequel' unless @postgres
 end
 
 if @simpleform
@@ -676,10 +685,10 @@ EOF
 # Add new flash types and a respond_to :html, :js, :json
 # ==========================================================================
 inject_into_file 'app/controllers/application_controller.rb', after: "protect_from_forgery with: :exception\n" do <<-RUBY
+
   # adds more flash types
   add_flash_types :error, :success, :info, :block
   respond_to :html, :js, :json
-
 RUBY
 end
 
