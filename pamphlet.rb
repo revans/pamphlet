@@ -1,4 +1,17 @@
 # ==========================================================================
+# TODO
+# ==========================================================================
+#
+# if devise is used, setup the user's fixtures and write model tests for the
+# user model or whatever they name the model.
+#
+# * write fixtures for any models created
+# * write unit tests for any models created
+#
+#
+#
+
+# ==========================================================================
 # Add some directories
 # ==========================================================================
 run "mkdir -p test/matchers"
@@ -147,6 +160,64 @@ if !@sqlite
 end
 
 # ==========================================================================
+# Replace ActiveRecord with Sequel
+# ==========================================================================
+if @sequel
+  gsub_file "config/application.rb", /require 'rails\/all'/, "# require 'rails/all'"
+  inject_into_file 'config/application.rb', after: "# require 'rails/all'\n" do <<-'RUBY'
+# frameworks removed:
+#
+# * active_record
+#
+
+# require the frameworks we want:
+#
+%w(
+  action_controller
+  action_view
+  action_mailer
+  rails/test_unit
+  sprockets
+).each do |framework|
+  begin
+    require "#{framework}/railtie"
+  rescue LoadError
+  end
+end
+    RUBY
+  end
+
+  application do <<-'RUBY'
+config.generators do |g|
+      g.orm :sequel
+    end
+
+  RUBY
+  end
+end
+
+# ==========================================================================
+# Add password_confirmation to be filtered from the logs
+# ==========================================================================
+gsub_file 'config/initializers/filter_parameter_logging.rb', /Rails.application.config.filter_parameters \+= \[:password\]/, 'Rails.application.config.filter_parameters += [:password, :password_confirmation]'
+
+# ==========================================================================
+# Setup Devise's layouts
+# ==========================================================================
+if @devise
+  application do <<-'RUBY'
+
+    config.to_prepare do
+      Devise::SessionsController.layout       'login'
+      Devise::RegistrationsController.layout  'login'
+      Devise::ConfirmationsController.layout  'login'
+      Devise::UnlocksController.layout        'login'
+      Devise::PasswordsController.layout      'login'
+    end
+    RUBY
+  end
+end
+# ==========================================================================
 # Update the Git Ignore File
 # ==========================================================================
 run <<-ABC
@@ -245,7 +316,7 @@ EOF
 # ==========================================================================
 gsub_file 'test/test_helper.rb', /fixtures :all/, '# fixtures :all'
 
-inject_into_file 'test/test_helper.rb', :after => "require 'rails/test_help'\n" do <<-RUBY
+inject_into_file 'test/test_helper.rb', :after => "require 'rails/test_help'\n" do <<-'RUBY'
 require 'capybara/dsl'
 require 'minitest/autorun'
 
@@ -267,7 +338,7 @@ Capybara.default_driver = :rack_test
 RUBY
 end
 
-inject_into_file 'test/test_helper.rb', :after => "ActiveRecord::Migration.check_pending!\n" do <<-RUBY
+inject_into_file 'test/test_helper.rb', :after => "ActiveRecord::Migration.check_pending!\n" do <<-'RUBY'
   include FixtureOverlord
   fixture_overlord :rule
 RUBY
@@ -380,8 +451,7 @@ EOF
 # ==========================================================================
 # Adding Cane Rake Task
 # ==========================================================================
-run <<-EOF
-tee lib/tasks/cane.task <<EOTL
+rakefile "cane.rake" do <<-'RUBY'
 unless Rails.env.production?
   begin
     require 'cane/rake_task'
@@ -399,14 +469,13 @@ unless Rails.env.production?
     warn "cane not available, quality task not provided."
   end
 end
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Adding Fixture Generator Tasks
 # ==========================================================================
-run <<-EOF
-tee lib/tasks/fixtures.rake <<EOTL
+rakefile "fixtures.rake" do <<-'RUBY'
 require 'yaml'
 require 'active_support'
 
@@ -441,15 +510,13 @@ namespace :fixtures do
     end
   end
 end
-
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Adding Generate Database conf
 # ==========================================================================
-run <<-EOF
-tee lib/tasks/generate_database_conf.rake <<EOTL
+rakefile "generate_database_conf.rake" do <<-'RUBY'
 require 'erb'
 namespace :db do
   namespace :config do
@@ -488,14 +555,13 @@ namespace :db do
 
   end
 end
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Rebuild the Database Rake Task
 # ==========================================================================
-run <<-EOF
-tee lib/tasks/rebuild.rake <<EOTL
+rakefile "rebuild.rake" do <<-'RUBY'
 namespace :db do
   desc 'Rebuild the database'
   task :rebuild => :environment do
@@ -506,14 +572,13 @@ namespace :db do
     end
   end
 end
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Report Generator Rake Task
 # ==========================================================================
-run <<-EOF
-tee lib/tasks/reports.rake <<EOTL
+rakefile "reports.rake" do <<-'RUBY'
 unless Rails.env.production?
   namespace :report do
     desc "Run SimpleCov"
@@ -545,14 +610,13 @@ unless Rails.env.production?
     end
   end
 end
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Rake tasks for various types of tests
 # ==========================================================================
-run <<-EOF
-tee lib/tasks/test.rake <<EOTL
+rakefile "test.rake" do <<-'RUBY'
 namespace :test do
   desc "Acceptance tests"
   Rake::TestTask.new(:acceptance) do |t|
@@ -598,16 +662,13 @@ Rake::Task[:test].enhance do
   Rake::Task["test:features"].invoke
   Rake::Task["test:resources"].invoke
 end
-
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Add Private Api Constraints
 # ==========================================================================
-run <<-EOF
-tee lib/private_api_constraints.rb <<EOTL
-
+lib "private_api_constraints.rb" do <<-'RUBY'
 # Example of how to use within the config/routes.rb file
 # namespace :api, defaults: { format: 'json' } do
 #   scope module: :v1, constraints: PrivateApiConstraints.new(version: 1, default: true) do
@@ -627,8 +688,8 @@ class PrivateApiConstraints
     @default || req.headers['Accept'].include?("application/vnd.vendor.application_name-v#{@version}+json")
   end
 end
-EOTL
-EOF
+  RUBY
+end
 
 # ==========================================================================
 # Add Font Mime Types
@@ -640,51 +701,47 @@ tee -a config/initializers/mime_types.rb <<EOTL
 # rack/sprockets fail on this
 Rack::Mime::MIME_TYPES['.woff'] = 'application/x-font-woff'
 
-
 # Register mime types for web fonts
 # Mime::Type.register "font/opentype",                  :otf
 # Mime::Type.register "application/x-font-woff",        :woff
 # Mime::Type.register "application/x-font-ttf",         :ttf
 # Mime::Type.register "application/vnd.ms-fontobject",  :eot
 # Mime::Type.register "image/svg+xml",                  :svg
-
 EOTL
 EOF
 
 # ==========================================================================
 # Asset Sync-ing
 # ==========================================================================
-run <<-EOF
-tee -a config/initializers/asset_sync.rb <<EOTL
+initializer "asset_sync.rb" do <<-'RUBY'
+  # if defined?(AssetSync) && Rails.env.production?
+  #   AssetSync.configure do |config|
 
-# if defined?(AssetSync) && Rails.env.production?
-#   AssetSync.configure do |config|
+  #     # fog setup
+  #     config.fog_provider           = ENV['FOG_PROVIDER']
+  #     config.fog_directory          = ENV['FOG_DIRECTORY']
+  #     config.fog_region             = ENV['FOG_REGION']
 
-#     # fog setup
-#     config.fog_provider           = ENV['FOG_PROVIDER']
-#     config.fog_directory          = ENV['FOG_DIRECTORY']
-#     config.fog_region             = ENV['FOG_REGION']
-
-#     # These can be found under Access Keys in AWS Security Credentials
-#     config.aws_access_key_id      = ENV['AWS_ACCESS_KEY_ID']
-#     config.aws_secret_access_key  = ENV['AWS_SECRET_ACCESS_KEY']
+  #     # These can be found under Access Keys in AWS Security Credentials
+  #     config.aws_access_key_id      = ENV['AWS_ACCESS_KEY_ID']
+  #     config.aws_secret_access_key  = ENV['AWS_SECRET_ACCESS_KEY']
 
 
-#     # don't delete files from the store
-#     config.existing_remote_files = 'keep'
+  #     # don't delete files from the store
+  #     config.existing_remote_files = 'keep'
 
-#     # automatically replace files with their equaivalent gzip compressed version
-#     config.gzip_compression = true
-#   end
-# end
+  #     # automatically replace files with their equaivalent gzip compressed version
+  #     config.gzip_compression = true
+  #   end
+  # end
+  RUBY
+end
 
-EOTL
-EOF
 
 # ==========================================================================
 # Add new flash types and a respond_to :html, :js, :json
 # ==========================================================================
-inject_into_file 'app/controllers/application_controller.rb', after: "protect_from_forgery with: :exception\n" do <<-RUBY
+inject_into_file 'app/controllers/application_controller.rb', after: "protect_from_forgery with: :exception\n" do <<-'RUBY'
 
   # adds more flash types
   add_flash_types :error, :success, :info, :block
