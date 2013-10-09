@@ -163,7 +163,9 @@ end
 # Replace ActiveRecord with Sequel
 # ==========================================================================
 if @sequel
+  gsub_file "config/environments/development.rb", /config.active_record.migration_error = :page_load/, "# config.active_record.migration_error = :page_load"
   gsub_file "config/application.rb", /require 'rails\/all'/, "# require 'rails/all'"
+
   inject_into_file 'config/application.rb', after: "# require 'rails/all'\n" do <<-'RUBY'
 # frameworks removed:
 #
