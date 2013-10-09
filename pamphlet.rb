@@ -64,8 +64,8 @@ if @devise
 end
 
 if @bourbon
-  gem "bourbon"
-  gem "neat"
+  gem 'bourbon'
+  gem 'neat'
 end
 
 gem_group :development, :test do
