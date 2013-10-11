@@ -1,4 +1,5 @@
 # ==========================================================================
+#
 # TODO
 # ==========================================================================
 #
@@ -347,7 +348,9 @@ RUBY
 end
 
 inject_into_file 'test/test_helper.rb', :after => "ActiveRecord::Migration.check_pending!\n" do <<-'RUBY'
-  include FixtureOverlord
+  include ::FileHelper
+  include ::FixtureOverlord
+
   fixture_overlord :rule
 RUBY
 end
@@ -357,7 +360,8 @@ tee -a test/test_helper.rb <<EOTL
 
 ############################
 class ActionController::TestCase
-  include FixtureOverlord
+  include ::FileHelper
+  include ::FixtureOverlord
   fixture_overlord :rule
 
   self.use_transactional_fixtures = true
@@ -365,7 +369,8 @@ end
 
 ############################
 class ActionDispatch::IntegrationTest
-  include FixtureOverlord
+  include ::FileHelper
+  include ::FixtureOverlord
   fixture_overlord :rule
 
   self.use_transactional_fixtures = true
@@ -379,7 +384,8 @@ end
 
 ############################
 class ActionView::TestCase
-  include FixtureOverlord
+  include ::FileHelper
+  include ::FixtureOverlord
   fixture_overlord :rule
 end
 
@@ -395,7 +401,8 @@ class MiniTest::Spec
   alias :method_name :__name__ if defined?(:__name__)
   self.fixture_path = File.join( Rails.root, 'test', 'fixtures' )
 
-  include FixtureOverlord
+  include ::FileHelper
+  include ::FixtureOverlord
   fixture_overlord :rule
 
   class << self
