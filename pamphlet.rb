@@ -16,13 +16,19 @@
 # ==========================================================================
 run "mkdir -p test/matchers"
 run "mkdir -p test/support"
+run "mkdir -p test/assets"
 run "mkdir -p app/decorators"
 run "mkdir -p app/presenters"
 run "mkdir -p script"
 run "mkdir -p app/assets/templates"
 run "mkdir -p app/assets/fonts"
+
 run "touch app/assets/templates/.gitkeep"
 run "touch app/assets/fonts/.gitkeep"
+
+run "touch test/assets/.gitkeep"
+run "touch test/matchers/.gitkeep"
+run "touch test/support/.gitkeep"
 
 # ==========================================================================
 # Setup Gems
@@ -443,12 +449,18 @@ module FileHelper
     asset_path.join(filename).to_s
   end
 
+  def write_fixture_file(filename, content)
+    ::File.open(asset_path.join(filename), 'w+') { |f| f.puts content.to_json }
+  end
+
   def fixture_data(name)
     YAML.dump(asset_path.join(name).read)
   end
 end
 EOTL
 EOF
+
+# Add file helper to test_helper.rb class
 
 # ==========================================================================
 # Adding Cane Rake Task
