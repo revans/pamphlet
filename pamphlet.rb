@@ -547,12 +547,18 @@ namespace :db do
       db_example  = Rails.root.join("config/database.yml.erb")
       puts
       puts  "Creating a new config/database.yml file. I'm going to need some information."
+      puts
+      print "What is your username for your local database? (leave empty to use #{`whoami`.chomp}): "
+      %x{stty -icanon -echo}
+      @user = STDIN.gets.chomp
+
+      puts
       print "What is your password for your local database? (leave empty for no password): "
 
       %x{stty -icanon -echo}
-      # get data
-      @user = %x|whoami|.chomp
       @password = STDIN.gets.chomp
+
+      @user = %x|whoami|.chomp if @user.blank?
 
       content = ERB.new(db_example.read).result
       File.open(Rails.root.join("config/database.yml").to_s, "w") do |file|
