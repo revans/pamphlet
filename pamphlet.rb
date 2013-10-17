@@ -328,6 +328,7 @@ gsub_file 'test/test_helper.rb', /fixtures :all/, '# fixtures :all'
 inject_into_file 'test/test_helper.rb', :after => "require 'rails/test_help'\n" do <<-'RUBY'
 require 'capybara/dsl'
 require 'minitest/autorun'
+require 'fixture_overlord'
 
 if ENV['COVERAGE']
   require_relative 'simplecov_config'
