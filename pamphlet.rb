@@ -611,7 +611,9 @@ unless Rails.env.production?
   namespace :report do
     desc "Run SimpleCov"
     task :coverage do
-      %x|COVERAGE=true rake test|
+      require 'simplecov'
+      SimpleCov.start 'rails'
+      Rake::Task["test"].execute
     end
 
     desc "Run Cane"
@@ -678,6 +680,15 @@ namespace :test do
   Rake::TestTask.new(:resources) do |t|
     t.libs << "test"
     t.pattern = "test/resources/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "Run with SimpleCov"
+  Rake::TestTask.new(:coverage) do |t|
+    require 'simplecov'
+    SimpleCov.start 'rails'
+    t.libs << "test"
+    t.pattern = "text/**/**/*_test.rb"
     t.verbose = true
   end
 end
