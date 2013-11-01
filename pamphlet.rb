@@ -140,6 +140,13 @@ end
 
 inject_into_file 'Gemfile', "\nruby '2.0.0'\n", after: "source 'https://rubygems.org'"
 
+
+# ==========================================================================
+# Run bundle install
+# ==========================================================================
+run "bundle install"
+
+
 # ==========================================================================
 # Create a Procfile
 # ==========================================================================
@@ -1140,6 +1147,9 @@ run "echo '# Readme' > Readme.mkd"
 # ==========================================================================
 # Move the Secret Token to use ENV
 # ========================================================================
+#
+# This needs to run after bundler has ran
+#
 gsub_file "config/initializers/secret_token.rb", /= '\w+'/, "= ENV['secret_token']"
 run <<-EOF
 rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
