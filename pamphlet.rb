@@ -15,21 +15,32 @@
 # ==========================================================================
 # Add some directories
 # ==========================================================================
+
+## Application Objects
+run "mkdir -p app/decorators"
+run "mkdir -p app/presenters"
+
+## Test Supporting Objects
 run "mkdir -p test/matchers"
 run "mkdir -p test/support"
 run "mkdir -p test/assets"
-run "mkdir -p app/decorators"
-run "mkdir -p app/presenters"
+
+## Script Directory
 run "mkdir -p script"
+
+## Directories for javascript templates and fonts
 run "mkdir -p app/assets/templates"
 run "mkdir -p app/assets/fonts"
 
+## Make sure these directories get added to git
 run "touch app/assets/templates/.gitkeep"
 run "touch app/assets/fonts/.gitkeep"
-
 run "touch test/assets/.gitkeep"
 run "touch test/matchers/.gitkeep"
 run "touch test/support/.gitkeep"
+
+## Create env files for development
+run "touch .env.dev"
 
 # ==========================================================================
 # Setup Gems
@@ -39,6 +50,7 @@ run "touch test/support/.gitkeep"
 @simpleform = yes?("Do you want to use simpleform?")
 @devise     = yes?("Do you want to use devise for Authentication?")
 @bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure?")
+@angular    = yes?("Are you going to use Angular.js?")
 
 @mysql      = !open('config/database.yml', 'r').grep(/mysql/).empty?
 @sqlite     = !open('config/database.yml', 'r').grep(/sqlite3/).empty?
@@ -74,6 +86,12 @@ if @bourbon
   gem 'bourbon'
   gem 'neat'
 end
+
+if @angular
+  gem 'angularjs-rails'
+end
+
+gem 'unicorn'
 
 gem_group :development, :test do
   gem 'pry'
@@ -308,10 +326,18 @@ module SimplecovConfig
     add_group 'Models',         'app/models'
     add_group 'Decorators',     'app/decorators'
     add_group 'Presenters',     'app/presenters'
-    # add_group 'Services',       'app/services'
     add_group 'Helpers',        'app/helpers'
     add_group 'Mailers',        'app/mailers'
     add_group 'Libraries',      'lib'
+
+    ## Additional Objects that could be added to your Rails Application
+    #
+    # add_group 'Services',       'app/services'
+    # add_group 'Forms',          'app/forms'
+    # add_group 'ViewObjects',    'app/view_objects'
+    # add_group 'QueryObjects',   'app/query_objects'
+    # add_group 'PolicyObjects',  'app/policy_objects'
+    # add_group 'ValueObjects',   'app/value_objects'
 
     merge_timeout 3600
   end
@@ -705,6 +731,21 @@ end
 end
 
 # ==========================================================================
+# Rake Task to create a new Secret Token and store it in the .env file
+# ==========================================================================
+rakefile "secret.rake" do <<-'RUBY'
+namespace :secret do
+  desc "Write a new Secret Token to the .env file"
+  task :token => :environment do
+    system <<-RAKE
+      rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
+    RAKE
+  end
+end
+  RUBY
+end
+
+# ==========================================================================
 # Add Private Api Constraints
 # ==========================================================================
 lib "private_api_constraints.rb" do <<-'RUBY'
@@ -775,7 +816,6 @@ initializer "asset_sync.rb" do <<-'RUBY'
   # end
   RUBY
 end
-
 
 # ==========================================================================
 # Add new flash types and a respond_to :html, :js, :json
@@ -1088,11 +1128,23 @@ EOF
 
 gsub_file "config/environments/production.rb", /# config.assets.precompile \+= %w\( search\.js \)/, "require_relative 'assets_to_precompile'\n  config.assets.precompile += AssetsToPrecompile.list"
 
+
+
 # ==========================================================================
 # Move the Readme to Markdown
 # ========================================================================
 run "rm README.rdoc"
 run "echo '# Readme' > Readme.mkd"
+
+
+# ==========================================================================
+# Move the Secret Token to use ENV
+# ========================================================================
+gsub_file "config/initializers/secret_token.rb", /= '\w+'/, "= ENV['secret_token']"
+run <<-EOF
+rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
+EOF
+
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
