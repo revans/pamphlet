@@ -254,7 +254,7 @@ config/database.yml
 .DS_Store
 coverage
 .powenv
-
+config/unicorn.rb
 EOF
 ABC
 
@@ -751,7 +751,7 @@ end
 lib "private_api_constraints.rb" do <<-'RUBY'
 # Example of how to use within the config/routes.rb file
 # namespace :api, defaults: { format: 'json' } do
-#   scope module: :v1, constraints: PrivateApiConstraints.new(version: 1, default: true) do
+#   namespace :v1, constraints: PrivateApiConstraints.new(version: 1, default: true) do
 #     ....
 #   end
 # end
@@ -960,6 +960,9 @@ set -e
 # input seed data into the database
 ./bin/rake db:seed --trace
 
+# write a new secret to the dot env file
+rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
+
 echo
 echo
 # Instructions
@@ -1006,6 +1009,9 @@ set -e
 
 # build test database from the schema
 ./bin/rake db:test:prepare --trace
+
+# write a new secret to the dot env file
+rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
 
 # run all tests
 ./bin/rake test
@@ -1070,15 +1076,15 @@ tee app/views/layouts/application.html.erb <<EOTL
     <%= csrf_meta_tags %>
 
   </head>
-  <body ng-app>
+  <body ng-app class=''>
     <!--[if lt IE 7]>
       <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
     <![endif]-->
 
     <div class="container">
       <div class="row">
-        <div class="col-md-3"></div>
-        <div class="col-md-9" role="main">
+        <div class="col-xs-12 col-md-3"></div>
+        <div class="col-xs-12 col-md-9" role="main">
           <%= yield %>
         </div>
       </div>
@@ -1129,7 +1135,6 @@ EOF
 gsub_file "config/environments/production.rb", /# config.assets.precompile \+= %w\( search\.js \)/, "require_relative 'assets_to_precompile'\n  config.assets.precompile += AssetsToPrecompile.list"
 
 
-
 # ==========================================================================
 # Move the Readme to Markdown
 # ========================================================================
@@ -1144,7 +1149,6 @@ gsub_file "config/initializers/secret_token.rb", /= '\w+'/, "= ENV['secret_token
 run <<-EOF
 rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
 EOF
-
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
