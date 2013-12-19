@@ -253,12 +253,13 @@ end
 # ==========================================================================
 run <<-ABC
 tee -a .gitignore <<EOF
-config/database.yml
+.bundle
 .env
 .DS_Store
-coverage
 .powenv
+coverage
 config/unicorn.rb
+config/database.yml
 EOF
 ABC
 
@@ -269,8 +270,7 @@ ABC
 run <<-EOF
 tee .agignore <<EOTL
 log
-vender
-script
+vendor
 doc
 tmp
 script
