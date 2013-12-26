@@ -13,85 +13,60 @@
 #
 
 # ==========================================================================
-# Add some directories
+# See what database was selected
 # ==========================================================================
-
-## Application Objects
-run "mkdir -p app/decorators"
-run "mkdir -p app/presenters"
-
-## Test Supporting Objects
-run "mkdir -p test/matchers"
-run "mkdir -p test/support"
-run "mkdir -p test/assets"
-
-## Script Directory
-run "mkdir -p script"
-
-## Directories for javascript templates and fonts
-run "mkdir -p app/assets/templates"
-run "mkdir -p app/assets/fonts"
-
-## Make sure these directories get added to git
-run "touch app/assets/templates/.gitkeep"
-run "touch app/assets/fonts/.gitkeep"
-run "touch test/assets/.gitkeep"
-run "touch test/matchers/.gitkeep"
-run "touch test/support/.gitkeep"
-
-## Create env files for development
-run "touch .env.dev"
-
-# ==========================================================================
-# Setup Gems
-# ==========================================================================
-@sequel     = yes?("Did you want to Sequel?")
-
-@simpleform = yes?("Do you want to use simpleform?")
-@devise     = yes?("Do you want to use devise for Authentication?")
-@bourbon    = yes?("Do you want to use Bourbon & Neat for UI Structure?")
-@angular    = yes?("Are you going to use Angular.js?")
-
 @mysql      = !open('config/database.yml', 'r').grep(/mysql/).empty?
 @sqlite     = !open('config/database.yml', 'r').grep(/sqlite3/).empty?
 @postgres   = !open('config/database.yml', 'r').grep(/postgres/).empty?
 
+# ==========================================================================
+# Get the current users' username
+# ==========================================================================
+@username   = "root"            if @mysql && @username.blank?
+@username ||= ::ENV['USER']     if @username.blank?
 
-unless @sqlite
-  @username   = ask("What username will you be using for development and testing? (defaults to '`whoami`')")
-  @password   = ask("What password will you be using for development and testing? (defaults to empty string)")
-  @username   = "root"          if @mysql && @username.blank?
-  @username ||= `whoami`.chomp  if @username.blank?
+# ==========================================================================
+# Add some directories
+# ==========================================================================
+
+directories = %w|app/assets/templates
+                 app/assets/fonts
+                 app/domain_objects/decorators
+                 app/domain_objects/value_objects
+                 app/domain_objects/service_objects
+                 app/domain_objects/form_objects
+                 app/domain_objects/query_objects
+                 app/domain_objects/view_objects
+                 app/domain_objects/policy_objects
+                 test/domain_objects/decorators
+                 test/domain_objects/value_objects
+                 test/domain_objects/service_objects
+                 test/domain_objects/form_objects
+                 test/domain_objects/query_objects
+                 test/domain_objects/view_objects
+                 test/domain_objects/policy_objects
+                 test/matchers
+                 test/support
+                 test/assets
+                |
+
+# Create new directories
+directories.each { |dir| run "mkdir -p #{dir}" }
+
+# Add a .gitkeep to each new directory so they are committed to git
+directories.each { |dir| run "touch #{dir}/.gitkeep" }
+
+# ==========================================================================
+# Setup Gems
+# ==========================================================================
+gem 'angularjs-rails'
+gem 'virtus'
+gem 'puma'
+gem 'rack-timeout'
+
+gem_group :staging, :production do
+  gem 'rails_12factor'
 end
-
-if @sequel
-  gem('sequel_pg', require: 'sequel') if @postgres
-  gem 'sequel' unless @postgres
-end
-
-if @simpleform
-  gem 'simple_form', '~> 3.0.0'
-  generate "simple_form:install"
-end
-
-if @devise
-  gem 'devise', '~> 3.1.1'
-  generate "devise:install"
-  model_name = ask("What would you like the user model to be called? (defaults to 'user')")
-  model_name = "user" if model_name.blank?
-  generate "devise", model_name
-end
-
-if @bourbon
-  gem 'bourbon'
-  gem 'neat'
-end
-
-if @angular
-  gem 'angularjs-rails'
-end
-
-gem 'unicorn'
 
 gem_group :development, :test do
   gem 'pry'
@@ -99,7 +74,7 @@ gem_group :development, :test do
 end
 
 gem_group :development do
-  gem 'capistrano'
+  gem 'turbulence'
   gem 'metric_fu'
   gem 'cane'
   gem 'brakeman'
@@ -147,22 +122,18 @@ run "bundle install"
 # ==========================================================================
 # Create a Procfile
 # ==========================================================================
-run "echo 'web: bundle exec unicorn -p $PORT -c ./config/unicorn.rb"
+# run "echo 'web: bundle exec unicorn -p $PORT -c ./config/unicorn.rb"
+run "echo 'web: bundle exec puma -p $PORT -c ./config/puma.rb"
 
 # We need this with foreman to see log output immediately
-run <<-EOF
-tee -a config/environments/development.rb <<EOTL
-
-STDOUT.sync = true
-EOTL
-EOF
+prepend_file "config/environments/development.rb", "STDOUT.sync = true\n\n"
 
 # ==========================================================================
-# Add a .rbenv-vars files for use with rbenv,
+# Add a .env.dev files for use with rbenv,
 # foreman, and pow
 # ==========================================================================
 run <<-EOF
-tee .rbenv-vars <<EOTL
+tee .env.dev <<EOTL
 RACK_ENV=development
 RAILS_ENV=development
 PORT=7000
@@ -181,85 +152,33 @@ run "cp config/database.yml config/database.yml.erb"
 
 if !@sqlite
   gsub_file "config/database.yml", /username: .*/, "username: #{@username}"
-  gsub_file "config/database.yml", /password: .*/, "password: #{@password}"
+  # gsub_file "config/database.yml", /password: .*/, "password: #{@password}"
 
   gsub_file "config/database.yml.erb", /username: .*/,  "username: <%= @user %>"
   gsub_file "config/database.yml.erb", /password:/,     "password: pass"
   gsub_file "config/database.yml.erb", /password: .*/,  "password: <%= @password %>"
 end
 
-# ==========================================================================
-# Replace ActiveRecord with Sequel
-# ==========================================================================
-if @sequel
-  gsub_file "config/environments/development.rb", /config.active_record.migration_error = :page_load/, "# config.active_record.migration_error = :page_load"
-  gsub_file "config/application.rb", /require 'rails\/all'/, "# require 'rails/all'"
-
-  inject_into_file 'config/application.rb', after: "# require 'rails/all'\n" do <<-'RUBY'
-# frameworks removed:
-#
-# * active_record
-#
-
-# require the frameworks we want:
-#
-%w(
-  action_controller
-  action_view
-  action_mailer
-  rails/test_unit
-  sprockets
-).each do |framework|
-  begin
-    require "#{framework}/railtie"
-  rescue LoadError
-  end
-end
-    RUBY
-  end
-
-  application do <<-'RUBY'
-config.generators do |g|
-      g.orm :sequel
-    end
-
-  RUBY
-  end
-end
 
 # ==========================================================================
 # Add password_confirmation to be filtered from the logs
 # ==========================================================================
 gsub_file 'config/initializers/filter_parameter_logging.rb', /Rails.application.config.filter_parameters \+= \[:password\]/, 'Rails.application.config.filter_parameters += [:password, :password_confirmation]'
 
-# ==========================================================================
-# Setup Devise's layouts
-# ==========================================================================
-if @devise
-  application do <<-'RUBY'
 
-    config.to_prepare do
-      Devise::SessionsController.layout       'login'
-      Devise::RegistrationsController.layout  'login'
-      Devise::ConfirmationsController.layout  'login'
-      Devise::UnlocksController.layout        'login'
-      Devise::PasswordsController.layout      'login'
-    end
-    RUBY
-  end
-end
 # ==========================================================================
 # Update the Git Ignore File
 # ==========================================================================
 run <<-ABC
 tee -a .gitignore <<EOF
-.bundle
 .env
+.foreman
 .DS_Store
-.powenv
 coverage
-config/unicorn.rb
+turbulence
+config/puma.rb
 config/database.yml
+config/secrets.yml
 EOF
 ABC
 
@@ -269,48 +188,208 @@ ABC
 # ==========================================================================
 run <<-EOF
 tee .agignore <<EOTL
-log
+Rakefile
+Gemfile
+config.ru
+.git
+.gitignore
+.foreman
+.env.dev
+.env
 vendor
-doc
 tmp
-script
+test
 public
+log
+db
+config
+bin
+script
 EOTL
 EOF
 
 # ==========================================================================
-# Added a unicorn.rb file to config/
+# Added a puma.rb file to config/
 # ==========================================================================
 run <<-OFE
-tee config/unicorn.rb <<EOTL
-# in general, 3 workers seems to be the best. Smaller apps can increase this
-worker_processes 3
+tee config/puma.rb <<EOTL
+#!/usr/bin/env puma
 
-# Load the app into the master before forking workers for super-fast worker
-# spawn times
-preload_app true
+# The directory to operate out of.
+#
+# The default is the current directory.
+#
+# directory '/u/apps/lolcat'
 
-# immediately restart any workers that haven't responded within 30 seconds
-timeout 30
+# Use an object or block as the rack application. This allows the
+# config file to be the application itself.
+#
+# app do |env|
+#   puts env
+#
+#   body = 'Hello, World!'
+#
+#   [200, { 'Content-Type' => 'text/plain', 'Content-Length' => body.length.to_s }, [body]]
+# end
 
-# queue_classic PID
-# @qc_pid = nil
+# Load “path” as a rackup file.
+#
+# The default is “config.ru”.
+#
+# rackup '/u/apps/lolcat/config.ru'
 
-before_fork do |server, worker|
-  # @qc_pid ||= spawn( "bundle exec rake qc:work" )
-  if defined?(ActiveRecord::Base)
+# Set the environment in which the rack's app will run. The value must be a string.
+#
+# The default is “development”.
+#
+# environment 'production'
+environment 'development'
+
+# Daemonize the server into the background. Highly suggest that
+# this be combined with “pidfile” and “stdout_redirect”.
+#
+# The default is “false”.
+#
+# daemonize
+# daemonize false
+
+# Store the pid of the server in the file at “path”.
+#
+# pidfile '/u/apps/lolcat/tmp/pids/puma.pid'
+
+# Use “path” as the file to store the server info state. This is
+# used by “pumactl” to query and control the server.
+#
+# state_path '/u/apps/lolcat/tmp/pids/puma.state'
+
+# Redirect STDOUT and STDERR to files specified. The 3rd parameter
+# (“append”) specifies whether the output is appended, the default is
+# “false”.
+#
+# stdout_redirect '/u/apps/lolcat/log/stdout', '/u/apps/lolcat/log/stderr'
+# stdout_redirect '/u/apps/lolcat/log/stdout', '/u/apps/lolcat/log/stderr', true
+
+stdout_redirect '/u/apps/lolcat/log/stdout.log', '/u/apps/lolcat/log/stderr.log', true
+
+# Disable request logging.
+#
+# The default is “false”.
+#
+# quiet
+
+# Configure “min” to be the minimum number of threads to use to answer
+# requests and “max” the maximum.
+#
+# The default is “0, 16”.
+#
+# threads 0, 16
+threads 1, 16
+
+# Bind the server to “url”. “tcp://”, “unix://” and “ssl://” are the only
+# accepted protocols.
+#
+# The default is “tcp://0.0.0.0:9292”.
+#
+# bind 'tcp://0.0.0.0:9292'
+# bind 'unix:///var/run/puma.sock'
+# bind 'unix:///var/run/puma.sock?umask=0777'
+# bind 'ssl://127.0.0.1:9292?key=path_to_key&cert=path_to_cert'
+bind 'tcp://0.0.0.0:9292'
+
+# Instead of “bind 'ssl://127.0.0.1:9292?key=path_to_key&cert=path_to_cert'” you
+# can also use the “ssl_bind” option.
+#
+# ssl_bind '127.0.0.1', '9292', { key: path_to_key, cert: path_to_cert }
+
+# Code to run before doing a restart. This code should
+# close log files, database connections, etc.
+#
+# This can be called multiple times to add code each time.
+#
+# on_restart do
+#   puts 'On restart...'
+# end
+
+# Command to use to restart puma. This should be just how to
+# load puma itself (ie. 'ruby -Ilib bin/puma'), not the arguments
+# to puma, as those are the same as the original process.
+#
+# restart_command '/u/app/lolcat/bin/restart_puma'
+
+# === Cluster mode ===
+
+# How many worker processes to run.
+#
+# The default is “0”.
+#
+# workers 2
+workers 2
+
+# Code to run when a worker boots to setup the process before booting
+# the app.
+#
+# This can be called multiple times to add hooks.
+#
+# on_worker_boot do
+#   puts 'On worker boot...'
+# end
+
+on_worker_boot do
+  ActiveSupport.on_load(:active_record) do
     ActiveRecord::Base.establish_connection
   end
 end
 
-after_fork do |server, worker|
-  # @qc_pid ||= spawn( "bundle exec rake qc:work" )
-  if defined?(ActiveRecord::Base)
-    ActiveRecord::Base.establish_connection
-  end
-end
+# === Puma control rack application ===
+
+# Start the puma control rack application on “url”. This application can
+# be communicated with to control the main server. Additionally, you can
+# provide an authentication token, so all requests to the control server
+# will need to include that token as a query parameter. This allows for
+# simple authentication.
+#
+# Check out https://github.com/puma/puma/blob/master/lib/puma/app/status.rb
+# to see what the app has available.
+#
+# activate_control_app 'unix:///var/run/pumactl.sock'
+# activate_control_app 'unix:///var/run/pumactl.sock', { auth_token: '12345' }
+# activate_control_app 'unix:///var/run/pumactl.sock', { no_token: true }
 EOTL
 OFE
+
+# ==========================================================================
+# Added a unicorn.rb file to config/
+# ==========================================================================
+# run <<-OFE
+# tee config/unicorn.rb <<EOTL
+# # in general, 3 workers seems to be the best. Smaller apps can increase this
+# worker_processes 3
+
+# # Load the app into the master before forking workers for super-fast worker
+# # spawn times
+# preload_app true
+
+# # immediately restart any workers that haven't responded within 30 seconds
+# timeout 30
+
+# # queue_classic PID
+# # @qc_pid = nil
+
+# before_fork do |server, worker|
+#   # @qc_pid ||= spawn( "bundle exec rake qc:work" )
+#   if defined?(ActiveRecord::Base)
+#     ActiveRecord::Base.establish_connection
+#   end
+# end
+
+# after_fork do |server, worker|
+#   # @qc_pid ||= spawn( "bundle exec rake qc:work" )
+#   if defined?(ActiveRecord::Base)
+#     ActiveRecord::Base.establish_connection
+#   end
+# end
+# EOTL
+# OFE
 
 # ==========================================================================
 # Add a Simplecov Config File
@@ -329,19 +408,15 @@ module SimplecovConfig
     add_group 'Controllers',    'app/controllers'
     add_group 'Models',         'app/models'
     add_group 'Decorators',     'app/decorators'
-    add_group 'Presenters',     'app/presenters'
+    add_group 'ValueObjects',   'app/value_objects'
+    add_group 'ServiceObjects', 'app/service_objects'
+    add_group 'FormObjects',    'app/form_objects'
+    add_group 'QueryObjects',   'app/query_objects'
+    add_group 'ViewObjects',    'app/view_objects'
+    add_group 'PolicyObjects',  'app/policy_objects'
     add_group 'Helpers',        'app/helpers'
     add_group 'Mailers',        'app/mailers'
     add_group 'Libraries',      'lib'
-
-    ## Additional Objects that could be added to your Rails Application
-    #
-    # add_group 'Services',       'app/services'
-    # add_group 'Forms',          'app/forms'
-    # add_group 'ViewObjects',    'app/view_objects'
-    # add_group 'QueryObjects',   'app/query_objects'
-    # add_group 'PolicyObjects',  'app/policy_objects'
-    # add_group 'ValueObjects',   'app/value_objects'
 
     merge_timeout 3600
   end
@@ -510,10 +585,10 @@ unless Rails.env.production?
 
     desc "Run cane to check quality metrics"
     Cane::RakeTask.new(:quality) do |cane|
-      cane.abc_max = 10
+      cane.abc_max      = 10
+      cane.no_style     = false
+      cane.abc_exclude  = %w(Foo::Bar#some_method)
       cane.add_threshold 'coverage/covered_percent', :>=, 99
-      cane.no_style = false
-      cane.abc_exclude = %w(Foo::Bar#some_method)
     end
 
     task :default => :quality
@@ -623,9 +698,14 @@ rakefile "rebuild.rake" do <<-'RUBY'
 namespace :db do
   desc 'Rebuild the database'
   task :rebuild => :environment do
-    steps = Rails.root.join("db/migrate").children.size
-
     %w(db:drop db:create db:schema:load db:seed db:test:prepare).each do |task|
+      Rake::Task[task].invoke
+    end
+  end
+
+  desc 'ReSeed the database'
+  task :reseed => :environment do
+    %w(db:drop db:create db:migrate db:seed db:test:prepare).each do |task|
       Rake::Task[task].invoke
     end
   end
@@ -653,12 +733,19 @@ unless Rails.env.production?
 
     desc "Run MetricFu"
     task :metrics do
-      system('cd ' + Rails.root.to_s + ' metric_fu -r')
+      # system('cd ' + Rails.root.to_s + ' metric_fu -r')
+      system 'metric_fu -r'
     end
 
     desc "Run Brakeman"
     task :security do
-      system 'cd ' + Rails.root.to_s + ' brakeman -d -o tmp/security.html'
+      # system 'cd ' + Rails.root.to_s + ' brakeman -d -o tmp/security.html'
+      system 'brakeman -d -o coverage/brakeman/security.html'
+    end
+
+    desc "Run Turbulence"
+    task :turbulence do
+      system 'bule'
     end
 
     desc "Run all Reports"
@@ -667,6 +754,7 @@ unless Rails.env.production?
       Rake::Task['report:metrics'].invoke
       Rake::Task['report:security'].invoke
       Rake::Task['report:cane'].invoke
+      Rake::Task['report:turbulence'].invoke
     end
   end
 end
@@ -685,10 +773,10 @@ namespace :test do
     t.verbose = true
   end
 
-  desc "Service tests"
-  Rake::TestTask.new(:services) do |t|
+  desc "Feature tests"
+  Rake::TestTask.new(:features) do |t|
     t.libs << "test"
-    t.pattern = "test/services/**/*_test.rb"
+    t.pattern = "test/features/**/*_test.rb"
     t.verbose = true
   end
 
@@ -699,17 +787,52 @@ namespace :test do
     t.verbose = true
   end
 
-  desc "Feature tests"
-  Rake::TestTask.new(:features) do |t|
+  desc "Decorator Tests"
+  Rake::TestTask.new(:decorators) do |t|
     t.libs << "test"
-    t.pattern = "test/features/**/*_test.rb"
+    t.pattern = "test/decorators/**/*_test.rb"
     t.verbose = true
   end
 
-  desc "Resource tests"
-  Rake::TestTask.new(:resources) do |t|
+  desc "Value Object Tests"
+  Rake::TestTask.new(:value_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/resources/**/*_test.rb"
+    t.pattern = "test/value_objects/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "Service Object Tests"
+  Rake::TestTask.new(:service_objects) do |t|
+    t.libs << "test"
+    t.pattern = "test/service_objects/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "Form Object Tests"
+  Rake::TestTask.new(:form_objects) do |t|
+    t.libs << "test"
+    t.pattern = "test/form_objects/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "Query Object Tests"
+  Rake::TestTask.new(:query_objects) do |t|
+    t.libs << "test"
+    t.pattern = "test/query_objects/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "View Object Tests"
+  Rake::TestTask.new(:view_objects) do |t|
+    t.libs << "test"
+    t.pattern = "test/view_objects/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "Policy Object Tests"
+  Rake::TestTask.new(:policy_objects) do |t|
+    t.libs << "test"
+    t.pattern = "test/policy_objects/**/*_test.rb"
     t.verbose = true
   end
 
@@ -718,19 +841,28 @@ namespace :test do
     require 'simplecov'
     SimpleCov.start 'rails'
     t.libs << "test"
-    t.pattern = "text/**/**/*_test.rb"
+    t.pattern = "test/**/**/**/*_test.rb"
     t.verbose = true
   end
 end
 
-
-Rake::Task[:test].enhance do
-  Rake::Task["test:acceptance"].invoke
-  Rake::Task["test:services"].invoke
-  Rake::Task["test:libraries"].invoke
-  Rake::Task["test:features"].invoke
-  Rake::Task["test:resources"].invoke
+Racke::Task[:test].enhance do |t|
+  t.test_files  = FileList['test/**/**/**/*_test.rb']
+  t.verbose     = true
 end
+
+# Rake::Task[:test].enhance do
+#   Rake::Task["test:acceptance"].invoke
+#   Rake::Task["test:features"].invoke
+#   Rake::Task["test:libraries"].invoke
+#   Rake::Task["test:decorators"].invoke
+#   Rake::Task["test:value_objects"].invoke
+#   Rake::Task["test:service_objects"].invoke
+#   Rake::Task["test:form_objects"].invoke
+#   Rake::Task["test:query_objects"].invoke
+#   Rake::Task["test:view_objects"].invoke
+#   Rake::Task["test:policy_objects"].invoke
+# end
   RUBY
 end
 
@@ -742,7 +874,7 @@ namespace :secret do
   desc "Write a new Secret Token to the .env file"
   task :token => :environment do
     system <<-RAKE
-      rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
+      rake secret | head -n1 | awk '{ print "SECRET_TOKEN=" $1 }' > .env
     RAKE
   end
 end
@@ -821,6 +953,74 @@ initializer "asset_sync.rb" do <<-'RUBY'
   RUBY
 end
 
+initializer "disable_xml_params.rb" do <<-'RUBY'
+# Protect against injection attacks
+# http://www.kb.cert.org/vuls/id/380039
+ActionDispatch::ParamsParser::DEFAULT_PARSERS.delete(Mime::XML)
+  RUBY
+end
+
+initializer "errors.rb" do <<-'RUBY'
+require 'net/http'
+require 'net/smtp'
+
+# Example:
+#   begin
+#     some http call
+#   rescue *HTTP_ERRORS => error
+#     notify_hoptoad error
+#   end
+
+HTTP_ERRORS = [Timeout::Error,
+               Errno::EINVAL,
+               Errno::ECONNRESET,
+               EOFError,
+               Net::HTTPBadResponse,
+               Net::HTTPHeaderSyntaxError,
+               Net::ProtocolError]
+
+SMTP_SERVER_ERRORS = [TimeoutError,
+                      IOError,
+                      Net::SMTPUnknownError,
+                      Net::SMTPServerBusy,
+                      Net::SMTPAuthenticationError]
+
+SMTP_CLIENT_ERRORS = [Net::SMTPFatalError,
+                      Net::SMTPSyntaxError]
+
+SMTP_ERRORS = SMTP_SERVER_ERRORS + SMTP_CLIENT_ERRORS
+  RUBY
+end
+
+initializer "rack-timeout.rb" do <<-'RUBY'
+Rack::Timeout.timeout = (ENV['TIMEOUT_IN_SECONDS'] || 5).to_i
+  RUBY
+end
+
+config = <<-RUBY
+
+  # Enable deflate / gzip compression of controller-generated responses
+  config.middleware.use Rack::Deflater
+RUBY
+
+inject_into_file 'config/environments/production.rb', config,
+        :after => "config.serve_static_assets = false\n"
+
+
+
+action_on_unpermitted_parameters = <<-RUBY
+\n
+  # Raise an ActionController::UnpermittedParameters exception when
+  # a parameter is not explcitly permitted but is passed anyway.
+  config.action_controller.action_on_unpermitted_parameters = :raise
+RUBY
+
+inject_into_file(
+  "config/environments/development.rb",
+  action_on_unpermitted_parameters,
+  before: "\nend"
+)
+
 # ==========================================================================
 # Add new flash types and a respond_to :html, :js, :json
 # ==========================================================================
@@ -835,17 +1035,17 @@ end
 # ==========================================================================
 # Rename the CSS and JS files to SCSS and Coffee
 # ==========================================================================
-run "mv app/assets/stylesheets/application.css app/assets/stylesheets/application.css.scss"
-run "mv app/assets/javascripts/application.js app/assets/javascripts/application.js.coffee"
-run "sed -i '' /require_tree/d app/assets/stylesheets/application.css.scss"
+# run "mv app/assets/stylesheets/application.css app/assets/stylesheets/application.css.scss"
+# run "mv app/assets/javascripts/application.js app/assets/javascripts/application.js.coffee"
+# run "sed -i '' /require_tree/d app/assets/stylesheets/application.css.scss"
 
-if @bourbon
-  run "echo >> app/assets/stylesheets/application.css.scss"
-  run "echo '@import \"bourbon\";' >>  app/assets/stylesheets/application.css.scss"
-  run "echo '@import \"neat\";' >>  app/assets/stylesheets/application.css.scss"
-end
+# if @bourbon
+#   run "echo >> app/assets/stylesheets/application.css.scss"
+#   run "echo '@import \"bourbon\";' >>  app/assets/stylesheets/application.css.scss"
+#   run "echo '@import \"neat\";' >>  app/assets/stylesheets/application.css.scss"
+# end
 
-run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_tree .' > app/assets/javascripts/application.js.coffee"
+# run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_tree .' > app/assets/javascripts/application.js.coffee"
 
 # ==========================================================================
 # Add a module to be extended to override the inheritance type column in
@@ -872,7 +1072,7 @@ EOF
 # Add a base decorator class that can be used to build custom decorators
 # ==========================================================================
 run <<-EOF
-tee app/decorators/decorate.rb <<EOTL
+tee app/domain_objects/decorators/decorate.rb <<EOTL
 require 'delegate'
 
 # Decorators are for sprinkling methods on model objects for use within Service type objects
@@ -900,57 +1100,17 @@ end
 EOTL
 EOF
 
-# ==========================================================================
-# Add a base presenter class that can be used to build custom presenters
-# ==========================================================================
-run <<-EOF
-tee app/presenters/presenter.rb <<EOTL
-require 'delegate'
-
-# Presenters sprinkle methods on model objects, service objects, or decorators objects specifically
-# for presenting to the view.
-module Presenters
-  class Presenter < SimpleDelegator
-
-    # Model: The model, service, decorator object
-    # Template: the specific view that the presenter will be used within
-    def initialize(model, template)
-      @template = template
-      super(model)
-    end
-
-    # delegates to the model/service/decorator object so their internal methods can
-    # be used
-    def to_model
-      __getobj__
-    end
-
-    # delegates to the model/service/decorator object class name
-    def class
-      to_model.class
-    end
-
-    # alias method for the template object
-    def h
-      @template
-    end
-  end
-end
-
-EOTL
-EOF
-
 
 # ==========================================================================
 # Add a setup script to setup the application
 # ==========================================================================
 run <<-EOF
-tee script/setup <<EOTL
+tee bin/setup <<EOTL
 #!/usr/bin/env bash
 set -e
 
 # install gems
-./bin/bundle
+./bin/bundle install
 
 # create config/database.yml file
 ./bin/rake db:config:create --trace
@@ -964,65 +1124,56 @@ set -e
 # input seed data into the database
 ./bin/rake db:seed --trace
 
-# write a new secret to the dot env file
-rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
+# Set up configurable environment variables
+if [ ! -f .env ]; then
+  cp .env.dev .env
+fi
 
-echo
-echo
-# Instructions
-echo "==> Dependencies (gems) have been installed."
-echo "==> Database connection adapter(config/database.yml) has been created."
-echo "==> The database has been migrated to the latest Schema."
-echo "==> Seed data has been loaded into the database."
-echo
-echo "==> Type 'powder -h' at the terminal to see commands for the Pow Server."
-echo "==> Type 'rake -T' at the terminal to see commands available for Rake to run against the Rails application."
-echo
-echo "==> Setting up the Pow Server. It'll output a URL you can use within the browser to interact with this application."
+# Pick a port for Foreman
+echo "port: 7000" > .foreman
 
-
-# setup pow
-powder link
+# Set up DNS via Pow
+if [ -d ~/.pow ]
+then
+  echo 7000 > ~/.pow/`basename $PWD`
+else
+  echo "Pow not set up but the team uses it for this project. Setup: http://goo.gl/RaDPO"
+fi
 
 EOTL
 EOF
-run "chmod +x script/setup"
+run 'chmod a+x bin/setup'
 
 # ==========================================================================
 # Add a jenkins script for CI setup
 # ==========================================================================
 run <<-EOF
-tee script/jenkins <<EOTL
+tee bin/jenkins <<EOTL
 #!/usr/bin/env bash
 
 set -e
 
 # install gems
-./bin/bundle
+./bin/bundle install
 
 # create config/database.yml file
 ./bin/rake db:config:jenkins[jenkins,jankyjenkins] --trace
 
-./bin/rake db:rebuild --trace
-
 # create database(s)
-# ./bin/rake db:create --trace
+./bin/rake db:create --trace
 
 # migrate those databases
-# ./bin/rake db:migrate --trace
+./bin/rake db:migrate --trace
 
 # build test database from the schema
 ./bin/rake db:test:prepare --trace
-
-# write a new secret to the dot env file
-rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
 
 # run all tests
 ./bin/rake test
 
 EOTL
 EOF
-run "chmod +x script/jenkins"
+run 'chmod a+x bin/jenkins'
 
 # ==========================================================================
 # Update the default layout
@@ -1080,19 +1231,26 @@ tee app/views/layouts/application.html.erb <<EOTL
     <%= csrf_meta_tags %>
 
   </head>
-  <body ng-app class=''>
+  <body class='' ng-app>
     <!--[if lt IE 7]>
       <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
     <![endif]-->
 
-    <div class="container">
-      <div class="row">
-        <div class="col-xs-12 col-md-3"></div>
-        <div class="col-xs-12 col-md-9" role="main">
-          <%= yield %>
-        </div>
-      </div>
-    </div>
+    <header class='header'>
+      <%= render 'header'>
+    </header>
+
+    <section class='col-xs-12'>
+      <%= render "flash_messages" %>
+    </section>
+
+    <main class='main-section' role='main'>
+      <%= yield %>
+    </main>
+
+    <footer class='footer'>
+      <%= render 'footer'>
+    </footer>
 
   </body>
 </html>
@@ -1107,36 +1265,36 @@ curl https://raw.github.com/twbs/bootstrap/master/dist/css/bootstrap.min.css > v
 curl https://raw.github.com/twbs/bootstrap/master/dist/js/bootstrap.min.js > vendor/assets/javascripts/bootstrap.js
 EOF
 
-# ==========================================================================
-# Add Bootstrap to the 'Assets to be Precompiled' list
-# ==========================================================================
-run <<-EOF
-tee config/environments/assets_to_precompile.rb <<EOTL
-# Assets to Precompile
-#
-# Use a module to manage the assets that are added and need to be precompiled
-# so we don't have to add them to each environment.
-#
-module AssetsToPrecompile
-  extend self
+# # ==========================================================================
+# # Add Bootstrap to the 'Assets to be Precompiled' list
+# # ==========================================================================
+# run <<-EOF
+# tee config/environments/assets_to_precompile.rb <<EOTL
+# # Assets to Precompile
+# #
+# # Use a module to manage the assets that are added and need to be precompiled
+# # so we don't have to add them to each environment.
+# #
+# module AssetsToPrecompile
+#   extend self
 
-  # JavaScript and CSS Assets
-  def list
-    stylesheets + javascripts
-  end
+#   # JavaScript and CSS Assets
+#   def list
+#     stylesheets + javascripts
+#   end
 
-  def javascripts
-    %w|bootstrap.js|
-  end
+#   def javascripts
+#     %w|bootstrap.js|
+#   end
 
-  def stylesheets
-    %w|bootstrap.css|
-  end
-end
-EOTL
-EOF
+#   def stylesheets
+#     %w|bootstrap.css|
+#   end
+# end
+# EOTL
+# EOF
 
-gsub_file "config/environments/production.rb", /# config.assets.precompile \+= %w\( search\.js \)/, "require_relative 'assets_to_precompile'\n  config.assets.precompile += AssetsToPrecompile.list"
+# gsub_file "config/environments/production.rb", /# config.assets.precompile \+= %w\( search\.js \)/, "require_relative 'assets_to_precompile'\n  config.assets.precompile += AssetsToPrecompile.list"
 
 
 # ==========================================================================
@@ -1146,16 +1304,16 @@ run "rm README.rdoc"
 run "echo '# Readme' > Readme.mkd"
 
 
-# ==========================================================================
-# Move the Secret Token to use ENV
-# ========================================================================
-#
-# This needs to run after bundler has ran
-#
-gsub_file "config/initializers/secret_token.rb", /= '\w+'/, "= ENV['secret_token']"
-run <<-EOF
-rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
-EOF
+# # ==========================================================================
+# # Move the Secret Token to use ENV
+# # ========================================================================
+# #
+# # This needs to run after bundler has ran
+# #
+# gsub_file "config/initializers/secret_token.rb", /= '\w+'/, "= ENV['secret_token']"
+# run <<-EOF
+# rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
+# EOF
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
@@ -1169,9 +1327,8 @@ git add --all
 git commit -am "Stubbed out the Application"
 EOF
 
-puts "To get the Twitter Bootstrap Font files, you can go here: https://github.com/twbs/bootstrap/tree/master/dist/fonts"
-puts "Don't forget Modernizr: http://modernizr.com/download/"
-puts "We didn't add it because we haven't found an easy way to automate the latest build to download."
+puts
+puts "---> Completed"
 
 # ==========================================================================
 #
