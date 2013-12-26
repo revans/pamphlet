@@ -846,7 +846,7 @@ namespace :test do
   end
 end
 
-Racke::Task[:test].enhance do |t|
+Rake::Task[:test].enhance do |t|
   t.test_files  = FileList['test/**/**/**/*_test.rb']
   t.verbose     = true
 end
@@ -1329,6 +1329,13 @@ EOF
 
 puts
 puts "---> Completed"
+
+at_exit do
+  run <<-EOF
+git add --all
+git commit -am "Finished stubbing application"
+  EOF
+end
 
 # ==========================================================================
 #
