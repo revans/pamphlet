@@ -87,7 +87,7 @@ gem_group :test do
   gem 'simplecov'
   gem 'capybara'
 
-  gem 'fixture_overlord', github: 'revans/fixture_overlord', branch: :master
+  # gem 'fixture_overlord', github: 'revans/fixture_overlord', branch: :master
 end
 
 
@@ -116,7 +116,7 @@ inject_into_file 'Gemfile', "\nruby '2.1.0'\n", after: "source 'https://rubygems
 # ==========================================================================
 # Run bundle install
 # ==========================================================================
-run "bundle install"
+run "bundle install --jobs 4"
 
 
 # ==========================================================================
@@ -1258,9 +1258,9 @@ EOTL
 EOF
 
 run 'mkdir -p app/views/application'
-touch 'app/views/application/_header.html.erb'
-touch 'app/views/application/_flash_messages.html.erb'
-touch 'app/views/application/_footer.html.erb'
+run 'touch app/views/application/_header.html.erb'
+run 'touch app/views/application/_flash_messages.html.erb'
+run 'touch app/views/application/_footer.html.erb'
 
 # ==========================================================================
 # Add bootstrap
