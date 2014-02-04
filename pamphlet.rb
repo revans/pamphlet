@@ -110,7 +110,7 @@ end
 # generates model and controller UML diagrams as svg and dot
 # gem 'railroady', group: :development
 
-inject_into_file 'Gemfile', "\nruby '2.0.0'\n", after: "source 'https://rubygems.org'"
+inject_into_file 'Gemfile', "\nruby '2.1.0'\n", after: "source 'https://rubygems.org'"
 
 
 # ==========================================================================
@@ -1237,7 +1237,7 @@ tee app/views/layouts/application.html.erb <<EOTL
     <![endif]-->
 
     <header class='header'>
-      <%= render 'header'>
+      <%= render 'header' %>
     </header>
 
     <section class='col-xs-12'>
@@ -1249,13 +1249,18 @@ tee app/views/layouts/application.html.erb <<EOTL
     </main>
 
     <footer class='footer'>
-      <%= render 'footer'>
+      <%= render 'footer' %>
     </footer>
 
   </body>
 </html>
 EOTL
 EOF
+
+run 'mkdir -p app/views/application'
+touch 'app/views/application/_header.html.erb'
+touch 'app/views/application/_flash_messages.html.erb'
+touch 'app/views/application/_footer.html.erb'
 
 # ==========================================================================
 # Add bootstrap
