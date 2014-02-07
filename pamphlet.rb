@@ -1378,8 +1378,6 @@ end
 # ==========================================================================
 # Integrate Bower
 # ==========================================================================
-# inject_into_file 'config/application.rb', "\n\n# Bower Support\nconfig.assets.paths << Rails.root.join('vendor', 'assets', 'bower_components')\n", after: "# config.i18n.default_locale = :de"
-
 inject_into_file 'config/application.rb', after: "# config.i18n.default_locale = :de" do <<-'RUBY'
 
   # don't have rails create stylesheets or javascript files
@@ -1393,6 +1391,9 @@ inject_into_file 'config/application.rb', after: "# config.i18n.default_locale =
 RUBY
 end
 
+# ==========================================================================
+# Create the .bowerrc file
+# ==========================================================================
 run <<-EOF
 tee .bowerrc <<EOTL
 {
@@ -1401,6 +1402,12 @@ tee .bowerrc <<EOTL
 }
 EOTL
 EOF
+
+
+# ==========================================================================
+# Generate a base controller with it's view
+# ==========================================================================
+generate "controller", "welcome index"
 
 
 # ==========================================================================
@@ -1415,6 +1422,11 @@ inject_into_file 'config/routes.rb', after: "Rails.application.routes.draw do\n"
       # define your api resources here...
     end
   end
+
+  root 'welcome#index'
+
+  # catch all route for angular
+  match "*path", via: :all, to: 'welcome#index'
 
 RUBY
 end
