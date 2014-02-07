@@ -85,6 +85,7 @@ gem_group :development do
   gem 'metric_fu'
   gem 'cane'
   gem 'brakeman'
+  gem 'web-console'
 end
 
 gem_group :test do
@@ -1031,8 +1032,19 @@ inject_into_file(
 inject_into_file 'app/controllers/application_controller.rb', after: "protect_from_forgery with: :exception\n" do <<-'RUBY'
 
   # adds more flash types
-  add_flash_types :error, :success, :info, :block
-  respond_to :html, :js, :json
+  add_flash_types :error, :success, :info
+  respond_to :html, :js
+
+  helper_method :app_name, :year
+
+  def app_name
+    @app_name ||= "Sharedown"
+  end
+
+  def year
+    @year ||= Time.now.year
+  end
+
 RUBY
 end
 
@@ -1060,34 +1072,34 @@ EOF
 # ==========================================================================
 # Add a base decorator class that can be used to build custom decorators
 # ==========================================================================
-run <<-EOF
-tee app/domain_objects/decorators/decorate.rb <<EOTL
-require 'delegate'
+# run <<-EOF
+# tee app/domain_objects/decorators/decorate.rb <<EOTL
+# require 'delegate'
 
-# Decorators are for sprinkling methods on model objects for use within Service type objects
-module Decorators
-  # Decorator is an inheritable class object to DRY necessary methods
-  class Decorate < SimpleDelegator
+# # Decorators are for sprinkling methods on model objects for use within Service type objects
+# module Decorators
+#   # Decorator is an inheritable class object to DRY necessary methods
+#   class Decorate < SimpleDelegator
 
-    # Model: pass the constructor the model object
-    def initialize(model)
-      super(model)
-    end
+#     # Model: pass the constructor the model object
+#     def initialize(model)
+#       super(model)
+#     end
 
-    # delegates method calls off to the actual model object
-    def to_model
-      __getobj__
-    end
+#     # delegates method calls off to the actual model object
+#     def to_model
+#       __getobj__
+#     end
 
-    # delegates the class method call to the model object
-    def class
-      to_model.class
-    end
-  end
-end
+#     # delegates the class method call to the model object
+#     def class
+#       to_model.class
+#     end
+#   end
+# end
 
-EOTL
-EOF
+# EOTL
+# EOF
 
 
 # ==========================================================================
@@ -1163,6 +1175,40 @@ set -e
 EOTL
 EOF
 run 'chmod a+x bin/jenkins'
+
+# ==========================================================================
+# Creating an Api Controller
+# ==========================================================================
+run "mkdir -p app/controllers/api/v1"
+run "mkdir -p test/controllers/api/v1"
+
+run <<-EOF
+tee app/controllers/api/v1/app_controller.rb <<EOTL
+class Api::V1::AppController < ActionController::Base
+  respond_to :json
+
+  # This provides a simple token authentication system
+  # before_action :authenticate
+
+  protected
+
+  # def authenticate
+  #   authenticate_token || render_unauthorized
+  # end
+
+  # def authenticate_token
+  #   authenticate_with_http_token do |token, options|
+  #     User.find_by(auth_token: token)
+  #   end
+  # end
+
+  # def render_unauthorized
+  #   self.headers['WWW-Authenticate'] = 'Token realm="Application"'
+  #   render json: 'Bad credentials', status: 401
+  # end
+end
+EOTL
+EOF
 
 # ==========================================================================
 # Update the default layout
@@ -1257,17 +1303,26 @@ tee app/views/layouts/application.html.erb <<EOTL
 
     <main class='main-section' role='main'>
       <div class='container'>
-        <section class='col-xs-12'>
+        <section class='flash-messages'>
           <%= render "flash_messages" %>
         </section>
 
-        <div class="" ng-view=""></div>
-        <%= yield %>
+        <section class='row'>
+          <ng-view></ng-view>
+
+          <%= yield %>
+        </section>
       </div>
     </main>
 
+    <div class='container'>
+      <hr />
+    </div>
+
     <footer class='footer'>
-      <%= render 'footer' %>
+      <div class='container'>
+        <small>@ <%= app_name %> <%= year %></small>
+      </div>
     </footer>
 
     <!-- Google Analytics: change UA-XXXXX-X to be your site's ID -->
@@ -1281,6 +1336,11 @@ tee app/views/layouts/application.html.erb <<EOTL
       ga('send', 'pageview');
     </script>
 
+    <!--[if lt IE 9]>
+    <script src="bower_components/es5-shim/es5-shim.js"></script>
+    <script src="bower_components/json3/lib/json3.min.js"></script>
+    <![endif]-->
+
     <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
   </body>
 </html>
@@ -1290,7 +1350,6 @@ EOF
 run 'mkdir -p app/views/application'
 run 'touch app/views/application/_header.html.erb'
 run 'touch app/views/application/_flash_messages.html.erb'
-run 'touch app/views/application/_footer.html.erb'
 
 
 # ==========================================================================
@@ -1319,7 +1378,20 @@ end
 # ==========================================================================
 # Integrate Bower
 # ==========================================================================
-inject_into_file 'config/application.rb', "\n\n# Bower Support\nconfig.assets.paths << Rails.root.join('vendor', 'assets', 'bower_components')\n", after: "# config.i18n.default_locale = :de"
+# inject_into_file 'config/application.rb', "\n\n# Bower Support\nconfig.assets.paths << Rails.root.join('vendor', 'assets', 'bower_components')\n", after: "# config.i18n.default_locale = :de"
+
+inject_into_file 'config/application.rb', after: "# config.i18n.default_locale = :de" do <<-'RUBY'
+
+  # don't have rails create stylesheets or javascript files
+  config.generators do |g|
+    g.assets false
+  end
+
+  # Bower Support
+  config.assets.paths << Rails.root.join('vendor', 'assets', 'bower_components')
+
+RUBY
+end
 
 run <<-EOF
 tee .bowerrc <<EOTL
@@ -1357,6 +1429,7 @@ run "mv app/assets/javascripts/application.js app/assets/javascripts/application
 
 run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_self\n#= require_tree ./models\n#= require_tree ./controllers\n' > app/assets/javascripts/application.js.coffee"
 
+run "echo '\n$icon-font-path: \"/bower_components/sass-bootstrap/fonts/\";' >> app/assets/stylesheets/application.css.scss"
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
