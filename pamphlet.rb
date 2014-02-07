@@ -29,25 +29,31 @@
 # Add some directories
 # ==========================================================================
 
-directories = %w|app/assets/templates
-                 app/assets/fonts
-                 app/domain_objects/decorators
-                 app/domain_objects/value_objects
-                 app/domain_objects/service_objects
-                 app/domain_objects/form_objects
-                 app/domain_objects/query_objects
-                 app/domain_objects/view_objects
-                 app/domain_objects/policy_objects
-                 test/domain_objects/decorators
-                 test/domain_objects/value_objects
-                 test/domain_objects/service_objects
-                 test/domain_objects/form_objects
-                 test/domain_objects/query_objects
-                 test/domain_objects/view_objects
-                 test/domain_objects/policy_objects
-                 test/matchers
-                 test/support
-                 test/assets
+                 # app/domain_objects/decorators
+                 # app/domain_objects/value_objects
+                 # app/domain_objects/service_objects
+                 # app/domain_objects/form_objects
+                 # app/domain_objects/query_objects
+                 # app/domain_objects/view_objects
+                 # app/domain_objects/policy_objects
+                 # test/domain_objects/decorators
+                 # test/domain_objects/value_objects
+                 # test/domain_objects/service_objects
+                 # test/domain_objects/form_objects
+                 # test/domain_objects/query_objects
+                 # test/domain_objects/view_objects
+                 # test/domain_objects/policy_objects
+
+directories = %w| app/assets/templates
+                  app/assets/fonts
+                  app/assets/javascripts/controllers
+                  app/assets/javascripts/models
+                  app/serializers
+                  test/serializers
+                  test/features
+                  test/matchers
+                  test/support
+                  test/assets
                 |
 
 # Create new directories
@@ -59,10 +65,11 @@ directories.each { |dir| run "touch #{dir}/.gitkeep" }
 # ==========================================================================
 # Setup Gems
 # ==========================================================================
-gem 'angularjs-rails'
+gem 'rack-cors'
+gem 'active_model_serializers'
+gem 'rack-timeout'
 gem 'virtus'
 gem 'puma'
-gem 'rack-timeout'
 
 gem_group :staging, :production do
   gem 'rails_12factor'
@@ -123,7 +130,7 @@ run "bundle install --jobs 4"
 # Create a Procfile
 # ==========================================================================
 # run "echo 'web: bundle exec unicorn -p $PORT -c ./config/unicorn.rb"
-run "echo 'web: bundle exec puma -p $PORT -c ./config/puma.rb"
+run "echo 'web: bundle exec puma -e $RAILS_ENV -p $PORT -S ~/puma -C config/puma.rb"
 
 # We need this with foreman to see log output immediately
 prepend_file "config/environments/development.rb", "STDOUT.sync = true\n\n"
@@ -243,7 +250,6 @@ tee config/puma.rb <<EOTL
 # The default is “development”.
 #
 # environment 'production'
-environment 'development'
 
 # Daemonize the server into the background. Highly suggest that
 # this be combined with “pidfile” and “stdout_redirect”.
@@ -268,8 +274,6 @@ environment 'development'
 #
 # stdout_redirect '/u/apps/lolcat/log/stdout', '/u/apps/lolcat/log/stderr'
 # stdout_redirect '/u/apps/lolcat/log/stdout', '/u/apps/lolcat/log/stderr', true
-
-stdout_redirect '/u/apps/lolcat/log/stdout.log', '/u/apps/lolcat/log/stderr.log', true
 
 # Disable request logging.
 #
@@ -335,9 +339,11 @@ workers 2
 # end
 
 on_worker_boot do
-  ActiveSupport.on_load(:active_record) do
-    ActiveRecord::Base.establish_connection
-  end
+  require "active_record"
+  cwd = File.dirname(__FILE__) + "/../config/database.yml"
+
+  ActiveRecord::Base.connection.disconnect! rescue ActiveRecord::ConnectionNotEstablished
+  ActiveRecord::Base.establish_connection(ENV["DATABASE_URL"] || YAML.load_file(cwd)[ENV["RAILS_ENV"]])
 end
 
 # === Puma control rack application ===
@@ -407,13 +413,14 @@ module SimplecovConfig
     # groups
     add_group 'Controllers',    'app/controllers'
     add_group 'Models',         'app/models'
-    add_group 'Decorators',     'app/decorators'
-    add_group 'ValueObjects',   'app/value_objects'
-    add_group 'ServiceObjects', 'app/service_objects'
-    add_group 'FormObjects',    'app/form_objects'
-    add_group 'QueryObjects',   'app/query_objects'
-    add_group 'ViewObjects',    'app/view_objects'
-    add_group 'PolicyObjects',  'app/policy_objects'
+    # add_group 'Decorators',     'app/domain_objects/decorators'
+    # add_group 'ValueObjects',   'app/domain_objects/value_objects'
+    # add_group 'ServiceObjects', 'app/domain_objects/service_objects'
+    # add_group 'FormObjects',    'app/domain_objects/form_objects'
+    # add_group 'QueryObjects',   'app/domain_objects/query_objects'
+    # add_group 'ViewObjects',    'app/domain_objects/view_objects'
+    # add_group 'PolicyObjects',  'app/domain_objects/policy_objects'
+    add_group 'Serializers',    'app/serializers'
     add_group 'Helpers',        'app/helpers'
     add_group 'Mailers',        'app/mailers'
     add_group 'Libraries',      'lib'
@@ -790,49 +797,56 @@ namespace :test do
   desc "Decorator Tests"
   Rake::TestTask.new(:decorators) do |t|
     t.libs << "test"
-    t.pattern = "test/decorators/**/*_test.rb"
+    t.pattern = "test/domain_objects/decorators/**/*_test.rb"
     t.verbose = true
   end
 
   desc "Value Object Tests"
   Rake::TestTask.new(:value_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/value_objects/**/*_test.rb"
+    t.pattern = "test/domain_objects/value_objects/**/*_test.rb"
     t.verbose = true
   end
 
   desc "Service Object Tests"
   Rake::TestTask.new(:service_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/service_objects/**/*_test.rb"
+    t.pattern = "test/domain_objects/service_objects/**/*_test.rb"
     t.verbose = true
   end
 
   desc "Form Object Tests"
   Rake::TestTask.new(:form_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/form_objects/**/*_test.rb"
+    t.pattern = "test/domain_objects/form_objects/**/*_test.rb"
     t.verbose = true
   end
 
   desc "Query Object Tests"
   Rake::TestTask.new(:query_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/query_objects/**/*_test.rb"
+    t.pattern = "test/domain_objects/query_objects/**/*_test.rb"
     t.verbose = true
   end
 
   desc "View Object Tests"
   Rake::TestTask.new(:view_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/view_objects/**/*_test.rb"
+    t.pattern = "test/domain_objects/view_objects/**/*_test.rb"
     t.verbose = true
   end
 
   desc "Policy Object Tests"
   Rake::TestTask.new(:policy_objects) do |t|
     t.libs << "test"
-    t.pattern = "test/policy_objects/**/*_test.rb"
+    t.pattern = "test/domain_objects/policy_objects/**/*_test.rb"
+    t.verbose = true
+  end
+
+  desc "Serializer Tests"
+  Rake::TestTask.new(:serializers) do |t|
+    t.libs << "test"
+    t.pattern = "test/serializers/**/*_test.rb"
     t.verbose = true
   end
 
@@ -844,47 +858,24 @@ namespace :test do
     t.pattern = "test/**/**/**/*_test.rb"
     t.verbose = true
   end
-end
 
-Rake::Task[:test].enhance do |t|
-  t.test_files  = FileList['test/**/**/**/*_test.rb']
-  t.verbose     = true
-end
-
-# Rake::Task[:test].enhance do
-#   Rake::Task["test:acceptance"].invoke
-#   Rake::Task["test:features"].invoke
-#   Rake::Task["test:libraries"].invoke
-#   Rake::Task["test:decorators"].invoke
-#   Rake::Task["test:value_objects"].invoke
-#   Rake::Task["test:service_objects"].invoke
-#   Rake::Task["test:form_objects"].invoke
-#   Rake::Task["test:query_objects"].invoke
-#   Rake::Task["test:view_objects"].invoke
-#   Rake::Task["test:policy_objects"].invoke
-# end
-  RUBY
-end
-
-# ==========================================================================
-# Rake Task to create a new Secret Token and store it in the .env file
-# ==========================================================================
-rakefile "secret.rake" do <<-'RUBY'
-namespace :secret do
-  desc "Write a new Secret Token to the .env file"
-  task :token => :environment do
-    system <<-RAKE
-      rake secret | head -n1 | awk '{ print "SECRET_TOKEN=" $1 }' > .env
-    RAKE
+  desc "Run all tests together"
+  Rake::TestTask.new(:all) do |t|
+    t.libs << "test"
+    t.test_files = FileList['test/**/**/**/*_test.rb']
+    t.verbose     = true
   end
 end
+
   RUBY
 end
+
 
 # ==========================================================================
 # Add Private Api Constraints
 # ==========================================================================
 lib "private_api_constraints.rb" do <<-'RUBY'
+
 # Example of how to use within the config/routes.rb file
 # namespace :api, defaults: { format: 'json' } do
 #   namespace :v1, constraints: PrivateApiConstraints.new(version: 1, default: true) do
@@ -893,15 +884,28 @@ lib "private_api_constraints.rb" do <<-'RUBY'
 # end
 
 class PrivateApiConstraints
+  attr_reader :version
+
+  # Version defaults to 1
   def initialize(options)
-    @version = options[:version]
+    @version = options.fetch(:version, 1)
     @default = options[:default]
   end
 
-  # TODO: Change the 'vendor' to the company name
-  #       and change 'application_name' to the actual application name
   def matches?(req)
-    @default || req.headers['Accept'].include?("application/vnd.vendor.application_name-v#{@version}+json")
+    @default || req.headers['Accept'].include?("application/vnd.#{company_name}.#{application_name}-v#{@version}+json")
+  end
+
+  private
+
+  # TODO: Change this to your Application Name (no spaces)
+  def application_name
+    'application'
+  end
+
+  # TODO: Change this to your Company's name (no spaces)
+  def company_name
+    'company'
   end
 end
   RUBY
@@ -1000,7 +1004,7 @@ end
 config = <<-RUBY
 
   # Enable deflate / gzip compression of controller-generated responses
-  config.middleware.use Rack::Deflater
+  config.middleware.use ::Rack::Deflater
 RUBY
 
 inject_into_file 'config/environments/production.rb', config,
@@ -1031,21 +1035,6 @@ inject_into_file 'app/controllers/application_controller.rb', after: "protect_fr
   respond_to :html, :js, :json
 RUBY
 end
-
-# ==========================================================================
-# Rename the CSS and JS files to SCSS and Coffee
-# ==========================================================================
-# run "mv app/assets/stylesheets/application.css app/assets/stylesheets/application.css.scss"
-# run "mv app/assets/javascripts/application.js app/assets/javascripts/application.js.coffee"
-# run "sed -i '' /require_tree/d app/assets/stylesheets/application.css.scss"
-
-# if @bourbon
-#   run "echo >> app/assets/stylesheets/application.css.scss"
-#   run "echo '@import \"bourbon\";' >>  app/assets/stylesheets/application.css.scss"
-#   run "echo '@import \"neat\";' >>  app/assets/stylesheets/application.css.scss"
-# end
-
-# run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_tree .' > app/assets/javascripts/application.js.coffee"
 
 # ==========================================================================
 # Add a module to be extended to override the inheritance type column in
@@ -1190,68 +1179,109 @@ tee app/views/layouts/application.html.erb <<EOTL
 <html class="no-js">
 <!--<![endif]-->
 
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="">
 
-<head>
-  <meta charset="utf-8">
-  <meta name="description" content="">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta http-equiv="cleartype" content="on">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="MobileOptimized" content="320">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-  <meta http-equiv="cleartype" content="on">
-  <meta name="HandheldFriendly" content="True">
-  <meta name="MobileOptimized" content="320">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="img/touch/apple-touch-icon-144x144-precomposed.png">
-  <link rel="apple-touch-icon-precomposed" sizes="114x114" href="img/touch/apple-touch-icon-114x114-precomposed.png">
-  <link rel="apple-touch-icon-precomposed" sizes="72x72" href="img/touch/apple-touch-icon-72x72-precomposed.png">
-  <link rel="apple-touch-icon-precomposed" href="img/touch/apple-touch-icon-57x57-precomposed.png">
-  <link rel="shortcut icon" href="img/touch/apple-touch-icon.png">
+  <!--
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="img/touch/apple-touch-icon-144x144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="img/touch/apple-touch-icon-114x114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="img/touch/apple-touch-icon-72x72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="img/touch/apple-touch-icon-57x57-precomposed.png">
+    <link rel="shortcut icon" href="img/touch/apple-touch-icon.png">
+  -->
 
   <!-- Tile icon for Win8 (144x144 + tile color) -->
-  <meta name="msapplication-TileImage" content="img/touch/apple-touch-icon-144x144-precomposed.png">
-  <meta name="msapplication-TileColor" content="#222222">
+  <!--
+    <meta name="msapplication-TileImage" content="img/touch/apple-touch-icon-144x144-precomposed.png">
+    <meta name="msapplication-TileColor" content="#222222">
+  -->
 
 
   <!-- For iOS web apps. Delete if not needed. https://github.com/h5bp/mobile-boilerplate/issues/94 -->
-    <!--
+  <!--
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="">
-    -->
+  -->
 
   <!-- This script prevents links from opening in Mobile Safari. https://gist.github.com/1042026 -->
-    <!--
+  <!--
     <script>(function(a,b,c){if(c in b&&b[c]){var d,e=a.location,f=/^(a|html)$/i;a.addEventListener("click",function(a){d=a.target;while(!f.test(d.nodeName))d=d.parentNode;"href"in d&&(d.href.indexOf("http")||~d.href.indexOf(e.host))&&(a.preventDefault(),e.href=d.href)},!1)}})(document,window.navigator,"standalone")</script>
-    -->
+  -->
+
+  <!-- Twitter Meta
+    <meta property="twitter:card" content="summary" />
+    <meta property="twitter:site" content="@" />
+    <meta property="twitter:title" content="" />
+    <meta property="twitter:description" content="" />
+    <meta property="twitter:creator" content="" />
+    <meta property="twitter:image:src" content="" />
+    <meta property="twitter:domain" content="" />
+  -->
+
+  <!-- Facebook
+    <meta property="og:title" content="" />
+    <meta property="og:type" content="article" />
+    <meta property="og:description" content=""/>
+    <meta property="og:image" content="" />
+    <meta property="og:site_name" content="" />
+    <meta property="fb:app_id" content="" />
+  -->
+
+    <meta name="og:url" content="" />
+    <link rel="canonical" href="" />
+    <link rel="prefetch" href="" />
+    <link rel="prerender" href="" />
 
     <title></title>
 
     <%= stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true %>
-    <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
     <%= csrf_meta_tags %>
 
   </head>
-  <body class='' ng-app>
+  <body class='' ng-app=''>
     <!--[if lt IE 7]>
-      <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+      <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
     <![endif]-->
 
     <header class='header'>
       <%= render 'header' %>
     </header>
 
-    <section class='col-xs-12'>
-      <%= render "flash_messages" %>
-    </section>
-
     <main class='main-section' role='main'>
-      <%= yield %>
+      <div class='container'>
+        <section class='col-xs-12'>
+          <%= render "flash_messages" %>
+        </section>
+
+        <div class="" ng-view=""></div>
+        <%= yield %>
+      </div>
     </main>
 
     <footer class='footer'>
       <%= render 'footer' %>
     </footer>
 
+    <!-- Google Analytics: change UA-XXXXX-X to be your site's ID -->
+    <script>
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+      ga('create', 'UA-XXXXX-X');
+      ga('send', 'pageview');
+    </script>
+
+    <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
   </body>
 </html>
 EOTL
@@ -1262,63 +1292,71 @@ run 'touch app/views/application/_header.html.erb'
 run 'touch app/views/application/_flash_messages.html.erb'
 run 'touch app/views/application/_footer.html.erb'
 
-# ==========================================================================
-# Add bootstrap
-# ==========================================================================
-run <<-EOF
-curl https://raw.github.com/twbs/bootstrap/master/dist/css/bootstrap.min.css > vendor/assets/stylesheets/bootstrap.css
-curl https://raw.github.com/twbs/bootstrap/master/dist/js/bootstrap.min.js > vendor/assets/javascripts/bootstrap.js
-EOF
-
-# # ==========================================================================
-# # Add Bootstrap to the 'Assets to be Precompiled' list
-# # ==========================================================================
-# run <<-EOF
-# tee config/environments/assets_to_precompile.rb <<EOTL
-# # Assets to Precompile
-# #
-# # Use a module to manage the assets that are added and need to be precompiled
-# # so we don't have to add them to each environment.
-# #
-# module AssetsToPrecompile
-#   extend self
-
-#   # JavaScript and CSS Assets
-#   def list
-#     stylesheets + javascripts
-#   end
-
-#   def javascripts
-#     %w|bootstrap.js|
-#   end
-
-#   def stylesheets
-#     %w|bootstrap.css|
-#   end
-# end
-# EOTL
-# EOF
-
-# gsub_file "config/environments/production.rb", /# config.assets.precompile \+= %w\( search\.js \)/, "require_relative 'assets_to_precompile'\n  config.assets.precompile += AssetsToPrecompile.list"
-
 
 # ==========================================================================
 # Move the Readme to Markdown
-# ========================================================================
+# ==========================================================================
 run "rm README.rdoc"
 run "echo '# Readme' > Readme.mkd"
 
 
-# # ==========================================================================
-# # Move the Secret Token to use ENV
-# # ========================================================================
-# #
-# # This needs to run after bundler has ran
-# #
-# gsub_file "config/initializers/secret_token.rb", /= '\w+'/, "= ENV['secret_token']"
-# run <<-EOF
-# rake secret | head -n1 | awk '{ print "session_token: " $1 }' > .env
-# EOF
+# ==========================================================================
+# ActiveModel Serialization Configuration
+# ==========================================================================
+initializer "active_model_serializers.rb" do <<-'RUBY'
+
+ActiveSupport.on_load(:active_model_serializers) do
+  # Disable for all serializers (except ArraySerializer)
+  ActiveModel::Serializer.root = false
+
+  # Disable for ArraySerializer
+  ActiveModel::ArraySerializer.root = false
+end
+
+  RUBY
+end
+
+# ==========================================================================
+# Integrate Bower
+# ==========================================================================
+inject_into_file 'config/application.rb', "\n\n# Bower Support\nconfig.assets.paths << Rails.root.join('vendor', 'assets', 'bower_components')\n", after: "# config.i18n.default_locale = :de"
+
+run <<-EOF
+tee .bowerrc <<EOTL
+{
+  "directory": "vendor/assets/bower_components",
+  "json": "bower.json"
+}
+EOTL
+EOF
+
+
+# ==========================================================================
+# Some extra setup for the routes file to serve an api
+# ==========================================================================
+prepend_file "config/routes.rb", "require_relative '../lib/private_api_constraints'\n\n"
+
+inject_into_file 'config/routes.rb', after: "Rails.application.routes.draw do\n" do <<-'RUBY'
+
+  namespace :api, defaults: { format: 'json' } do
+    namespace :v1, constraints: PrivateApiConstraints.new(version: 1, default: true) do
+      # define your api resources here...
+    end
+  end
+
+RUBY
+end
+
+
+# ==========================================================================
+# Rename the CSS and JS files to SCSS and Coffee
+# ==========================================================================
+run "mv app/assets/stylesheets/application.css app/assets/stylesheets/application.css.scss"
+run "mv app/assets/javascripts/application.js app/assets/javascripts/application.js.coffee"
+# run "sed -i '' /require_tree/d app/assets/stylesheets/application.css.scss"
+
+run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_self\n#= require_tree ./models\n#= require_tree ./controllers\n' > app/assets/javascripts/application.js.coffee"
+
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
