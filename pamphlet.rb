@@ -1288,7 +1288,7 @@ tee app/views/layouts/application.html.erb <<EOTL
 
     <title></title>
 
-    <%= stylesheet_link_tag    "application", media: "all", "data-turbolinks-track" => true %>
+    <%= stylesheet_link_tag "application", media: "all", "data-turbolinks-track" => true %>
     <%= csrf_meta_tags %>
 
   </head>
@@ -1337,8 +1337,8 @@ tee app/views/layouts/application.html.erb <<EOTL
     </script>
 
     <!--[if lt IE 9]>
-    <script src="bower_components/es5-shim/es5-shim.js"></script>
-    <script src="bower_components/json3/lib/json3.min.js"></script>
+    <script src="vendor/bower_components/es5-shim/es5-shim.js"></script>
+    <script src="vendor/bower_components/json3/lib/json3.min.js"></script>
     <![endif]-->
 
     <%= javascript_include_tag "application", "data-turbolinks-track" => true %>
@@ -1441,7 +1441,7 @@ run "mv app/assets/javascripts/application.js app/assets/javascripts/application
 
 run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_self\n#= require_tree ./models\n#= require_tree ./controllers\n' > app/assets/javascripts/application.js.coffee"
 
-run "echo '\n$icon-font-path: \"/bower_components/sass-bootstrap/fonts/\";' >> app/assets/stylesheets/application.css.scss"
+run "echo '\n$icon-font-path: \"vendor/bower_components/sass-bootstrap/fonts/\";' >> app/assets/stylesheets/application.css.scss"
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
