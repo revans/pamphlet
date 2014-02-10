@@ -512,7 +512,6 @@ class MiniTest::Spec
 
   Rails.application.routes.default_url_options[:host] = 'example.com'
 
-  alias :method_name :__name__ if defined?(:__name__)
   self.fixture_path = File.join( Rails.root, 'test', 'fixtures' )
 
   include ::FileHelper
