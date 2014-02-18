@@ -1030,7 +1030,7 @@ inject_into_file(
 inject_into_file 'app/controllers/application_controller.rb', after: "protect_from_forgery with: :exception\n" do <<-'RUBY'
 
   # adds more flash types
-  add_flash_types :error, :success, :info
+  add_flash_types :error, :success, :info, :warning, :danger # follows bootstrap alerts
   respond_to :html, :js
 
   helper_method :app_name, :year
@@ -1317,7 +1317,7 @@ tee app/views/layouts/application.html.erb <<EOTL
 
     <footer class='footer'>
       <div class='container'>
-        <small>@ <%= app_name %> <%= year %></small>
+        <small>&copy; <%= app_name %> <%= year %></small>
       </div>
     </footer>
 
@@ -1428,8 +1428,9 @@ run "mv app/assets/javascripts/application.js app/assets/javascripts/application
 # run "sed -i '' /require_tree/d app/assets/stylesheets/application.css.scss"
 
 run "echo '#= require jquery\n#= require jquery_ujs\n#= require turbolinks\n#= require_self\n' > app/assets/javascripts/application.js.coffee"
+run "echo '\n\n$('document').ready ()->\n  current = document.URL\n  $('.navbar-nav li a[href="'+current+'"').parent().addClass('active')' >> app/assets/javascripts/application.js.coffee"
 
-run "echo '\n$icon-font-path: \"vendor/bower_components/sass-bootstrap/fonts/\";' >> app/assets/stylesheets/application.css.scss"
+run "echo '\n$icon-font-path: \"sass-bootstrap/fonts/\";\n@import \"sass-bootstrap/lib/bootstrap.scss\";' >> app/assets/stylesheets/application.css.scss"
 
 # ==========================================================================
 # Create database, Run migrations, and get this into version control
